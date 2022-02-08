@@ -20,7 +20,7 @@ import {
     PatientSex,
     Referral,
     ReferralStatus,
-    SessionType,
+    SessionType
 } from './enums';
 
 export type KeyedMap<T> = { [key: string]: T };
@@ -32,6 +32,7 @@ export interface IUser extends IIdentity {
 export interface IIdentity {
     identityId: string;
     name: string;
+    // patients, social workers (10 patients but have managers too), consulting psychiatrists, oncologists (probably won't access regisrty)
 }
 
 export interface IReferralStatus {
@@ -57,7 +58,7 @@ export interface ISession {
     behavioralStrategyOther: string;
     behavioralActivationChecklist: BAChecklistFlags;
 
-    // Referrals
+    // Referrals -
     referrals: IReferralStatus[];
 
     otherRecommendations: string;
@@ -79,6 +80,7 @@ export interface ICaseReview {
 
 export interface IAssessment {
     assessmentId: string;
+    // Category. why is this a string, gad-7, phq-9
     assessmentName: string;
     assigned: boolean;
     assignedDate: Date;
@@ -202,6 +204,7 @@ export interface ISafetyPlan {
     reasonsForLiving?: string;
     warningSigns?: string[];
     copingStrategies?: string[];
+    // contacts are unique for a patient.
     distractions?: (string | IContact)[];
     supporters?: IContact[];
     professionalSupporters?: IContact[];
@@ -210,9 +213,14 @@ export interface ISafetyPlan {
 }
 
 export interface IValuesInventory {
+
+
+    // registry toggle. everything except
     assigned: boolean;
     assignedDate: Date;
     lastUpdatedDate?: Date;
+
+    // Length 5
     values?: ILifeAreaValue[];
 }
 
@@ -223,20 +231,25 @@ export interface ILifeAreaContent {
 }
 
 export interface ILifeAreaValue {
-    id: string;
+    //
+    id: string; // unique identifier.
+    // value patient created
     name: string;
     dateCreated: Date;
     dateEdited: Date;
-    lifeareaId: string;
+    // identifier ties it back to life areas.
+    lifeareaId: string; // educaiton, mindobody, etc.
     activities: ILifeAreaValueActivity[];
 }
 
 export interface ILifeAreaValueActivity {
     id: string;
     name: string;
+    // going to point towards id in ILifeAreaValue
     valueId: string;
     dateCreated: Date;
     dateEdited: Date;
+    // could be skipped. it's goung to be exactly same as lifeareaId in ILifeAreaValue
     lifeareaId: string;
     enjoyment?: number;
     importance?: number;
@@ -245,29 +258,39 @@ export interface ILifeAreaValueActivity {
 export interface IPatient {
     identity: IIdentity;
 
-    // Patient info
+    // Patient info - registry only
     profile: IPatientProfile;
     clinicalHistory: IClinicalHistory;
 
-    // Values inventory and safety plan
+    // Values inventory and safety plan - patient only
     valuesInventory: IValuesInventory;
     safetyPlan: ISafetyPlan;
 
-    // Sessions
+    // Sessions - registry only
     sessions: ISession[];
     caseReviews: ICaseReview[];
 
-    // Assessments
+    // Assessments - filled by patient but scheduled might be regsitry
+
+    // check if ypte to capture assessments exist - phq9, and gad7.
+
     assessments: IAssessment[];
     scheduledAssessments: IScheduledAssessment[];
     assessmentLogs: IAssessmentLog[];
 
-    // Activities
+    // Activities - filled by patient
     activities: IActivity[];
     scheduledActivities: IScheduledActivity[];
     activityLogs: IActivityLog[];
 
-    // Mood logs
+    // Mood logs - filled by patient.
+    // medication tracking similar to moodlogs.
+    // Missing something. medication tracking.
+    /*
+    boolean value to say if you have takedn the medication.
+    boolean question for care team.
+    question if above is yes. date. maybe use ILog?
+    */
     moodLogs: IMoodLog[];
 }
 
