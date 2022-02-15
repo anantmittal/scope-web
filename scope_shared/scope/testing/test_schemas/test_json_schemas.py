@@ -92,6 +92,30 @@ TEST_CONFIGS = [
         document_path="values-inventory.json",
         expected_valid=True,
     ),
+    ConfigTestJSONSchema(
+        name="one-of-example-one",
+        schema=scope.schema.one_of_example_schema,
+        document_path="one-of-examples/example-one-valid.json",
+        expected_valid=True,
+    ),
+    ConfigTestJSONSchema(
+        name="one-of-example-one",
+        schema=scope.schema.one_of_example_schema,
+        document_path="one-of-examples/example-one-valid.json",
+        expected_valid=True,
+    ),
+    ConfigTestJSONSchema(
+        name="one-of-example-two",
+        schema=scope.schema.one_of_example_schema,
+        document_path="one-of-examples/example-two-valid.json",
+        expected_valid=True,
+    ),
+    ConfigTestJSONSchema(
+        name="one-of-example-three",
+        schema=scope.schema.one_of_example_schema,
+        document_path="one-of-examples/example-three-invalid.json",
+        expected_valid=False,
+    ),
 ]
 
 

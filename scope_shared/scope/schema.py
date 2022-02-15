@@ -1,7 +1,8 @@
-import jschon
 import json
 from pathlib import Path
 from typing import Optional
+
+import jschon
 
 # Declare each schema in order to support code analysis/completion
 activity_schema: Optional[jschon.JSONSchema] = None
@@ -25,6 +26,7 @@ life_area_value_activity_schema: Optional[jschon.JSONSchema] = None
 log_schema: Optional[jschon.JSONSchema] = None
 mood_log_schema: Optional[jschon.JSONSchema] = None
 mood_logs_schema: Optional[jschon.JSONSchema] = None
+one_of_example_schema: Optional[jschon.JSONSchema] = None
 patient_schema: Optional[jschon.JSONSchema] = None
 patient_profile_schema: Optional[jschon.JSONSchema] = None
 referral_status_schema: Optional[jschon.JSONSchema] = None
@@ -88,6 +90,7 @@ SCHEMAS = {
     "session_schema": "session.json",
     "sessions_schema": "sessions.json",
     "values_inventory_schema": "values-inventory.json",
+    "one_of_example_schema": "one-of-example.json",
 }
 
 
