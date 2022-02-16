@@ -5,14 +5,20 @@
 	"description": "IAssessment Type",
 	"type": "object",
 	"properties": {
-		"_assessment_id": {
+		"_id": {
 			"type": "string"
 		},
 		"_type": {
 			"const": "assessment"
 		},
+		"_set_id": {
+			"type": "string"
+		},
 		"_rev": {
 			"type": "number"
+		},
+		"assessmentId": {
+			"type": "string"
 		},
 		"assessmentName": {
 			"type": "string"
@@ -31,5 +37,5 @@
 		}
 	},
 	"additionalProperties": false,
-	"required": ["_assessment_id", "_type", "assessmentName", "frequency", "dayOfWeek"]
+	"required": ["_type", "assessmentId", "assessmentName", "frequency", "dayOfWeek"]
 }
