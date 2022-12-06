@@ -1,17 +1,33 @@
-import random
-from datetime import datetime
-from typing import Callable
-
 import faker
 import pytest
+import random
+from typing import Callable
+
+import scope.database.date_utils as date_utils
 import scope.database.patient.patient_profile
+import scope.enums
 import scope.schema
-import scope.testing.fake_data.enums
+import scope.schema_utils
 import scope.testing.fake_data.fake_utils as fake_utils
+
+OPTIONAL_KEYS = [
+    "clinicCode",
+    "birthdate",
+    "sex",
+    "gender",
+    "pronoun",
+    "race",
+    # "primaryOncologyProvider",
+    # "primaryCareManager",
+    "discussionFlag",
+    "followupSchedule",
+    "depressionTreatmentStatus",
+]
 
 
 def fake_patient_profile_factory(
-    *, faker_factory: faker.Faker, validate: bool = True
+    *,
+    faker_factory: faker.Faker,
 ) -> Callable[[], dict]:
     """
     Obtain a factory that will generate fake patient profile documents.
@@ -25,42 +41,33 @@ def fake_patient_profile_factory(
             "_type": scope.database.patient.patient_profile.DOCUMENT_TYPE,
             "name": name,
             "MRN": mrn,
-            "clinicCode": fake_utils.fake_enum_value(
-                scope.testing.fake_data.enums.ClinicCode
-            ),
-            "birthdate": datetime.combine(
+            "clinicCode": fake_utils.fake_enum_value(scope.enums.ClinicCode),
+            "birthdate": date_utils.format_date(
                 faker_factory.date_of_birth(),
-                datetime.min.time(),  # 00:00.00.00
-            ).isoformat(),
-            "sex": fake_utils.fake_enum_value(scope.testing.fake_data.enums.PatientSex),
-            "gender": fake_utils.fake_enum_value(
-                scope.testing.fake_data.enums.PatientGender
             ),
-            "pronoun": fake_utils.fake_enum_value(
-                scope.testing.fake_data.enums.PatientPronoun
-            ),
-            "race": fake_utils.fake_enum_flag_values(
-                scope.testing.fake_data.enums.PatientRace
-            ),
+            "sex": fake_utils.fake_enum_value(scope.enums.PatientSex),
+            "gender": fake_utils.fake_enum_value(scope.enums.PatientGender),
+            "pronoun": fake_utils.fake_enum_value(scope.enums.PatientPronoun),
+            "race": fake_utils.fake_enum_flag_values(scope.enums.PatientRace),
             # TODO: identity information
             # "primaryOncologyProvider": data_fake_identity_factory(),
             # "primaryCareManager": data_fake_identity_factory(),
             "discussionFlag": fake_utils.fake_enum_flag_values(
-                scope.testing.fake_data.enums.DiscussionFlag
+                scope.enums.DiscussionFlag
             ),
             "followupSchedule": fake_utils.fake_enum_value(
-                scope.testing.fake_data.enums.FollowupSchedule
+                scope.enums.FollowupSchedule
             ),
             "depressionTreatmentStatus": fake_utils.fake_enum_value(
-                scope.testing.fake_data.enums.DepressionTreatmentStatus
+                scope.enums.DepressionTreatmentStatus
             ),
         }
 
-        if validate:
-            scope.schema.raise_for_invalid(
-                schema=scope.schema.patient_profile_schema,
-                document=fake_patient_profile,
-            )
+        # Remove a randomly sampled subset of optional parameters.
+        fake_patient_profile = scope.testing.fake_data.fake_utils.fake_optional(
+            document=fake_patient_profile,
+            optional_keys=OPTIONAL_KEYS,
+        )
 
         return fake_patient_profile
 
@@ -75,7 +82,18 @@ def fixture_data_fake_patient_profile_factory(
     Fixture for data_fake_patient_profile_factory.
     """
 
-    return fake_patient_profile_factory(
+    unvalidated_factory = fake_patient_profile_factory(
         faker_factory=faker,
-        validate=True,
     )
+
+    def factory() -> dict:
+        fake_patient_profile = unvalidated_factory()
+
+        scope.schema_utils.xfail_for_invalid_schema(
+            schema=scope.schema.patient_profile_schema,
+            data=fake_patient_profile,
+        )
+
+        return fake_patient_profile
+
+    return factory

@@ -3,6 +3,7 @@ import { compareDesc, format } from 'date-fns';
 import { observer } from 'mobx-react';
 import React, { FunctionComponent } from 'react';
 import { BehavioralStrategyChecklistFlags, BehavioralStrategyChecklistItem } from 'shared/enums';
+import { formatDateOnly } from 'shared/time';
 import ActionPanel from 'src/components/common/ActionPanel';
 import { GridTextField } from 'src/components/common/GridField';
 import { usePatient } from 'src/stores/stores';
@@ -13,7 +14,7 @@ export const TreatmentInfo: FunctionComponent = observer(() => {
 
     const sortedAssessmentLogs = currentPatient?.assessmentLogs
         .slice()
-        .sort((a, b) => compareDesc(a.recordedDate, b.recordedDate));
+        .sort((a, b) => compareDesc(a.recordedDateTime, b.recordedDateTime));
 
     const latestPhqLog = sortedAssessmentLogs.filter((a) => a.assessmentId == 'phq-9')[0];
     const latestPhqScore = getLatestScore(currentPatient?.assessmentLogs, 'phq-9');
@@ -53,15 +54,21 @@ export const TreatmentInfo: FunctionComponent = observer(() => {
         .map((ref) => `${ref.referralType} - ${ref.referralStatus}`)
         .join('\n');
 
+    const loading =
+        currentPatient?.loadPatientState.pending ||
+        currentPatient?.loadSessionsState.pending ||
+        currentPatient?.loadAssessmentLogsState.pending;
+    const error = currentPatient?.loadSessionsState.error || currentPatient?.loadAssessmentLogsState.error;
+
     return (
-        <ActionPanel id="treatment" title="Ongoing Treatment Information">
+        <ActionPanel id="treatment" title="Ongoing Treatment Information" loading={loading} error={error}>
             <Grid container spacing={2} alignItems="stretch">
                 <GridTextField
                     sm={6}
                     label="Latest PHQ-9 Score"
                     value={latestPhqScore > 0 ? latestPhqScore : 'No data'}
                     helperText={
-                        !!latestPhqLog ? `Updated: ${format(latestPhqLog.recordedDate, 'MM/dd/yyyy')}` : undefined
+                        !!latestPhqLog ? `Updated: ${format(latestPhqLog.recordedDateTime, 'MM/dd/yyyy')}` : undefined
                     }
                 />
                 <GridTextField
@@ -69,28 +76,35 @@ export const TreatmentInfo: FunctionComponent = observer(() => {
                     label="Latest GAD-7 Score"
                     value={latestGadScore > 0 ? latestGadScore : 'No data'}
                     helperText={
-                        !!latestGadLog ? `Updated: ${format(latestGadLog.recordedDate, 'MM/dd/yyyy')}` : undefined
+                        !!latestGadLog ? `Updated: ${format(latestGadLog.recordedDateTime, 'MM/dd/yyyy')}` : undefined
                     }
                 />
                 <GridTextField
                     sm={12}
                     label="Current medications"
                     value={currentMedications}
-                    helperText={!!latestSessionDate ? `Updated: ${format(latestSessionDate, 'MM/dd/yyyy')}` : undefined}
+                    multiline={true}
+                    helperText={
+                        !!latestSessionDate ? `Updated: ${formatDateOnly(latestSessionDate, 'MM/dd/yyyy')}` : undefined
+                    }
                 />
                 <GridTextField
                     sm={12}
                     label="Behavioral Strategies Used"
                     value={behavioralStrategiesUsed}
                     multiline={true}
-                    helperText={!!latestSessionDate ? `Updated: ${format(latestSessionDate, 'MM/dd/yyyy')}` : undefined}
+                    helperText={
+                        !!latestSessionDate ? `Updated: ${formatDateOnly(latestSessionDate, 'MM/dd/yyyy')}` : undefined
+                    }
                 />
                 <GridTextField
                     sm={12}
                     label="Referrals"
                     value={referrals}
                     multiline={true}
-                    helperText={!!latestSessionDate ? `Updated: ${format(latestSessionDate, 'MM/dd/yyyy')}` : undefined}
+                    helperText={
+                        !!latestSessionDate ? `Updated: ${formatDateOnly(latestSessionDate, 'MM/dd/yyyy')}` : undefined
+                    }
                 />
             </Grid>
         </ActionPanel>

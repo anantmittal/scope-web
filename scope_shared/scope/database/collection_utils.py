@@ -1,9 +1,12 @@
+import base64
 import copy
 from dataclasses import dataclass
+import hashlib
 import pymongo.collection
-from typing import List
-from typing import Optional
+from typing import List, Optional
+import uuid
 
+import scope.database.document_utils as document_utils
 
 PRIMARY_COLLECTION_INDEX = [
     ("_type", pymongo.ASCENDING),
@@ -13,36 +16,48 @@ PRIMARY_COLLECTION_INDEX = [
 PRIMARY_COLLECTION_INDEX_NAME = "_primary"
 
 
-def normalize_document(
-    *,
-    document: dict,
-) -> dict:
+@dataclass(frozen=True)
+class PutResult:
+    inserted_count: int
+    inserted_id: str
+    document: dict
+
+
+@dataclass(frozen=True)
+class SetPostResult:
+    inserted_count: int
+    inserted_id: str
+    inserted_set_id: str
+    document: dict
+
+
+@dataclass(frozen=True)
+class SetPutResult:
+    inserted_count: int
+    inserted_id: str
+    inserted_set_id: str
+    document: dict
+
+
+def generate_set_id() -> str:
     """
-    Obtain a new document in normalized format.
+    Generates an id that:
+    - Is guaranteed to be URL safe.
+    - Is guaranteed to be compatible with MongoDB collection naming.
+    - Is expected to be unique.
     """
 
-    normalized_document = {}
-    keys_remaining = list(document.keys())
+    # Obtain uniqueness
+    generated_uuid = uuid.uuid4()
+    # Manage length so these don't seem obscenely long
+    generated_digest = hashlib.blake2b(generated_uuid.bytes, digest_size=8).digest()
+    # Obtain URL safety and MongoDB collection name compatibility.
+    generated_base64 = base64.b32encode(generated_digest).decode("ascii").casefold()
 
-    # Dictionaries preserve order, so ensure these are first
-    keys_prefix = ["_id", "_type", "_set_id", "_rev"]
-    for key_current in keys_prefix:
-        if key_current in keys_remaining:
-            value_current = document[key_current]
+    # Remove terminating "=="
+    clean_generated_base64 = generated_base64.rstrip("=")
 
-            if key_current == "_id":
-                # Ensure _id can serialize
-                normalized_document[key_current] = str(value_current)
-            else:
-                normalized_document[key_current] = copy.deepcopy(value_current)
-
-            keys_remaining.remove(key_current)
-
-    # And then the remaining keys
-    for key_current in keys_remaining:
-        normalized_document[key_current] = copy.deepcopy(document[key_current])
-
-    return normalized_document
+    return clean_generated_base64
 
 
 def delete_set_element(
@@ -146,12 +161,12 @@ def get_set(
         if not pipeline_result.alive:
             return None
 
-        result = list(pipeline_result)
+        documents = list(pipeline_result)
 
-    # Normalize the results
-    result = [normalize_document(document=result_current) for result_current in result]
+    # Normalize the list of documents
+    documents = document_utils.normalize_documents(documents=documents)
 
-    return result
+    return documents
 
 
 def get_set_element(
@@ -197,7 +212,7 @@ def get_set_element(
         document = pipeline_result.next()
 
     # Normalize the document
-    document = normalize_document(document=document)
+    document = document_utils.normalize_document(document=document)
 
     return document
 
@@ -235,75 +250,160 @@ def get_singleton(
         if not pipeline_result.alive:
             return None
 
-        result = pipeline_result.next()
+        document = pipeline_result.next()
 
-    # Normalize the result
-    result = normalize_document(document=result)
+    # Normalize the document
+    document = document_utils.normalize_document(document=document)
 
-    return result
+    return document
 
 
-@dataclass(frozen=True)
-class PutResult:
-    inserted_count: int
-    inserted_id: str
-    document: dict
+def post_set_element(
+    *,
+    collection: pymongo.collection.Collection,
+    document_type: str,
+    semantic_set_id: Optional[str],
+    document: dict,
+) -> SetPostResult:
+    """
+    Put a set element document.
+    - Document must not already include an "_id".
+    - An existing "_type" must match document_type.
+    - Document must not already include an "_set_id".
+    - Document must not already include an "_rev".
+    - semantic_set_id may indicate a field that will be treated like "_set_id".
+      - Document must not already include an "semantic_set_id".
+      - "semantic_set_id" will additionally be set to "_set_id".
+    """
+
+    # Work with a copy
+    document = copy.deepcopy(document)
+
+    # Document must not include an "_id",
+    # as this indicates it was retrieved from the database.
+    if "_id" in document:
+        raise ValueError('Document must not have existing "_id"')
+
+    # If a document includes a "_type", it must match document_type.
+    if "_type" in document:
+        if document["_type"] != document_type:
+            raise ValueError('document["_type"] must match document_type')
+    else:
+        document["_type"] = document_type
+
+    # Document must not include an "_set_id",
+    # as post expects to assign this.
+    if "_set_id" in document:
+        raise ValueError('Document must not have existing "_set_id"')
+
+    # Document must not include an "_rev",
+    # as this indicates it was retrieved from the database.
+    if "_rev" in document:
+        raise ValueError('Document must not have existing "_rev"')
+
+    # Generate a "_set_id" and a "_rev"
+    generated_set_id = generate_set_id()
+    document["_set_id"] = generated_set_id
+    document["_rev"] = 1
+
+    # If a semantic_set_id is specified
+    if semantic_set_id:
+        # Document must not include a semantic set id,
+        # as post expects to assign this.
+        if semantic_set_id in document:
+            raise ValueError(
+                'Document must not have existing "{}"'.format(semantic_set_id)
+            )
+
+        document[semantic_set_id] = generated_set_id
+
+    # insert_one will modify the document to insert an "_id"
+    document = document_utils.normalize_document(document=document)
+    result = collection.insert_one(document=document)
+    document = document_utils.normalize_document(document=document)
+
+    return SetPostResult(
+        inserted_count=1,
+        inserted_id=str(result.inserted_id),
+        inserted_set_id=generated_set_id,
+        document=document,
+    )
 
 
 def put_set_element(
     *,
     collection: pymongo.collection.Collection,
     document_type: str,
+    semantic_set_id: Optional[str],
     set_id: str,
-    document: dict
-) -> PutResult:
+    document: dict,
+) -> SetPutResult:
     """
     Put a set element document.
     - Document must not already include an "_id".
     - An existing "_type" must match document_type.
     - An existing "_set_id" must match set_id.
     - An existing "_rev" will be incremented.
+    - semantic_set_id may indicate a field that will be treated like "_set_id".
+      - An existing "semantic_set_id" must match set_id.
+      - An existing "semantic_set_id" must match an existing "_set_id".
+      - "semantic_set_id" will additionally be set to "_set_id".
     """
 
-    # Normalization includes making a copy
-    document = normalize_document(document=document)
+    # Work with a copy
+    document = copy.deepcopy(document)
 
     # Document must not include an "_id",
     # as this indicates it was retrieved from the database.
     if "_id" in document:
-        raise ValueError("Document must not have existing \"_id\"")
+        raise ValueError('Document must not have existing "_id"')
 
     # If a document includes a "_type", it must match document_type.
     if "_type" in document:
         if document["_type"] != document_type:
-            raise ValueError("document[\"_type\"] must match document_type")
+            raise ValueError('document["_type"] must match document_type')
     else:
         document["_type"] = document_type
 
     # If a document includes a "_set_id", it must match set_id.
     if "_set_id" in document:
         if document["_set_id"] != set_id:
-            raise ValueError("document[\"_set_id\"] must match set_id")
+            raise ValueError('document["_set_id"] must match set_id')
     else:
+        # Set the "_set_id"
         document["_set_id"] = set_id
 
     # Increment the "_rev"
     if "_rev" in document:
         if not isinstance(document["_rev"], int):
-            raise ValueError("document[\"_rev\"] must be int")
+            raise ValueError('document["_rev"] must be int')
 
         document["_rev"] += 1
     else:
         document["_rev"] = 1
 
-    # insert_one will modify the document to insert an "_id"
-    result = collection.insert_one(document=document)
-    document = normalize_document(document=document)
+    # If a semantic_set_id is specified
+    if semantic_set_id:
+        # If a document includes a "semantic_set_id", it must match set_id.
+        if semantic_set_id in document:
+            if document[semantic_set_id] != set_id:
+                raise ValueError(
+                    'document["{}"] must match set_id'.format(semantic_set_id)
+                )
+        else:
+            # Set the "semantic_set_id"
+            document[semantic_set_id] = set_id
 
-    return PutResult(
+    # insert_one will modify the document to insert an "_id"
+    document = document_utils.normalize_document(document=document)
+    result = collection.insert_one(document=document)
+    document = document_utils.normalize_document(document=document)
+
+    return SetPutResult(
         inserted_count=1,
         inserted_id=str(result.inserted_id),
-        document=document
+        inserted_set_id=set_id,
+        document=document,
     )
 
 
@@ -311,7 +411,7 @@ def put_singleton(
     *,
     collection: pymongo.collection.Collection,
     document_type: str,
-    document: dict
+    document: dict,
 ) -> PutResult:
     """
     Put a singleton document.
@@ -320,36 +420,37 @@ def put_singleton(
     - An existing "_rev" will be incremented.
     """
 
-    # Normalization includes making a copy
-    document = normalize_document(document=document)
+    # Work with a copy
+    document = copy.deepcopy(document)
 
     # Document must not include an "_id",
     # as this indicates it was retrieved from the database.
     if "_id" in document:
-        raise ValueError("Document must not have existing \"_id\"")
+        raise ValueError('Document must not have existing "_id"')
 
     # If a document includes a "_type", it must match document_type.
     if "_type" in document:
         if document["_type"] != document_type:
-            raise ValueError("document[\"_type\"] must match document_type")
+            raise ValueError('document["_type"] must match document_type')
     else:
         document["_type"] = document_type
 
     # Increment the "_rev"
     if "_rev" in document:
         if not isinstance(document["_rev"], int):
-            raise ValueError("document[\"_rev\"] must be int")
+            raise ValueError('document["_rev"] must be int')
 
         document["_rev"] += 1
     else:
         document["_rev"] = 1
 
     # insert_one will modify the document to insert an "_id"
+    document = document_utils.normalize_document(document=document)
     result = collection.insert_one(document=document)
-    document = normalize_document(document=document)
+    document = document_utils.normalize_document(document=document)
 
     return PutResult(
         inserted_count=1,
         inserted_id=str(result.inserted_id),
-        document=document
+        document=document,
     )

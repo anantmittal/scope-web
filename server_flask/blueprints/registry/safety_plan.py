@@ -1,62 +1,90 @@
-import http
-from functools import wraps
+import flask
+import flask_json
+import pymongo.errors
 
+import request_context
+import request_utils
 import scope.database
 import scope.database.patient.safety_plan
-from flask import Blueprint, abort, current_app, jsonify, request
-from flask_json import as_json
-from request_context import request_context
-from scope.schema import safety_plan_schema
-from utils import validate_schema
+import scope.schema
 
-registry_safety_plan_blueprint = Blueprint(
-    "registry_safety_plan_blueprint", __name__, url_prefix="/patients"
+safety_plan_blueprint = flask.Blueprint(
+    "safety_plan_blueprint",
+    __name__,
 )
 
 
-# NOTE: Passing the patient collection name for now. Will fix this after auth workflow is finalized.
-@registry_safety_plan_blueprint.route(
-    "/<string:patient_collection>/safety", methods=["GET"]
+@safety_plan_blueprint.route(
+    "/<string:patient_id>/safetyplan",
+    methods=["GET"],
 )
-@as_json
-def get_patient_safety_plan(patient_collection):
-    context = request_context()
+@flask_json.as_json
+def get_safety_plan(patient_id):
+    context = request_context.authorized_for_patient(patient_id=patient_id)
+    patient_collection = context.patient_collection(patient_id=patient_id)
 
-    result = scope.database.patient.safety_plan.get_safety_plan(
-        database=context.database, collection_name=patient_collection
+    # Get the document
+    document = scope.database.patient.safety_plan.get_safety_plan(
+        collection=patient_collection,
     )
 
-    if result:
-        return result, http.HTTPStatus.OK
-    else:
-        abort(http.HTTPStatus.NOT_FOUND)
-
-
-@registry_safety_plan_blueprint.route(
-    "/<string:patient_collection>/safety", methods=["PUT"]
-)
-@validate_schema(safety_plan_schema)
-@as_json
-def update_patient_safety_plan(patient_collection):
-
-    safety_plan = request.json
-
-    if "_id" in safety_plan:
-        abort(http.HTTPStatus.UNPROCESSABLE_ENTITY)  # 422
-
-    # Update _rev
-    safety_plan["_rev"] = safety_plan["_rev"] + 1
-
-    context = request_context()
-
-    result = scope.database.patient.safety_plan.create_safety_plan(
-        database=context.database,
-        collection_name=patient_collection,
-        safety_plan=safety_plan,
+    # Validate and normalize the response
+    document = request_utils.singleton_get_response_validate(
+        document=document,
     )
 
-    if result is not None:
-        return str(result.inserted_id), http.HTTPStatus.OK
+    return {
+        "safetyplan": document,
+    }
+
+
+@safety_plan_blueprint.route(
+    "/<string:patient_id>/safetyplan",
+    methods=["PUT"],
+)
+@request_utils.validate_schema(
+    schema=scope.schema.safety_plan_schema,
+    key="safetyplan",
+)
+@flask_json.as_json
+def put_safety_plan(patient_id):
+    context = request_context.authorized_for_patient(patient_id=patient_id)
+    patient_collection = context.patient_collection(patient_id=patient_id)
+
+    # Obtain the document being put
+    document = flask.request.json["safetyplan"]
+
+    # Validate and normalize the request
+    document = request_utils.singleton_put_request_validate(
+        document=document,
+    )
+
+    # Store the document
+    try:
+        result = scope.database.patient.safety_plan.put_safety_plan(
+            collection=patient_collection,
+            safety_plan=document,
+        )
+    except pymongo.errors.DuplicateKeyError:
+        # Indicates a revision race condition, return error with current revision
+        document_conflict = scope.database.patient.safety_plan.get_safety_plan(
+            collection=patient_collection
+        )
+        # Validate and normalize the response
+        document_conflict = request_utils.singleton_put_response_validate(
+            document=document_conflict
+        )
+
+        request_utils.abort_revision_conflict(
+            document={
+                "safetyplan": document_conflict,
+            }
+        )
     else:
-        # NOTE: Send back the latest version of the document. Hold off on that.
-        abort(http.HTTPStatus.UNPROCESSABLE_ENTITY)  # 422
+        # Validate and normalize the response
+        document_response = request_utils.singleton_put_response_validate(
+            document=result.document,
+        )
+        return {
+            "safetyplan": document_response,
+        }

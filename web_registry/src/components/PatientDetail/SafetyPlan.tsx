@@ -13,25 +13,43 @@ import { usePatient } from 'src/stores/stores';
 export const SafetyPlan: FunctionComponent = observer(() => {
     const currentPatient = usePatient();
     const { safetyPlan } = currentPatient;
-    const { assigned, assignedDate, lastUpdatedDate } = safetyPlan;
+    const { assigned, assignedDateTime, lastUpdatedDateTime } = safetyPlan;
 
     var dateStrings: string[] = [];
-    if (assigned && !!assignedDate) {
-        dateStrings.push(`${getString('patient_safety_plan_assigned_date')} ${format(assignedDate, 'MM/dd/yyyy')}`);
+    if (assigned && !!assignedDateTime) {
+        dateStrings.push(`${getString('patient_safety_plan_assigned_date')} ${format(assignedDateTime, 'MM/dd/yyyy')}`);
     }
 
-    if (!!lastUpdatedDate) {
+    if (!!lastUpdatedDateTime) {
         dateStrings.push(
-            `${getString('patient_safety_plan_activity_date_header')} ${format(lastUpdatedDate, 'MM/dd/yyyy')}`
+            `${getString('patient_safety_plan_activity_date_header')} ${format(lastUpdatedDateTime, 'MM/dd/yyyy')}`,
         );
     }
+
+    const formatStringArray = (stringArray: string[] | undefined) => {
+        return stringArray?.map((s, idx) => `${idx + 1}. ${s}`).join('\n');
+    };
+
+    const formatContactArray = (contactArray: IContact[] | undefined) => {
+        return contactArray
+            ?.map(
+                (c, idx) =>
+                    `${idx + 1}. ${c.name}${
+                        c.phoneNumber || c.emergencyNumber || c.address
+                            ? ` at ${c.phoneNumber || c.emergencyNumber || c.address}`
+                            : ''
+                    }`,
+            )
+            .join('\n');
+    };
 
     return (
         <ActionPanel
             id={getString('patient_detail_subsection_safety_plan_hash')}
             title={getString('patient_detail_subsection_safety_plan_title')}
             inlineTitle={dateStrings.join(', ')}
-            loading={currentPatient?.state == 'Pending'}
+            loading={currentPatient?.loadPatientState.pending || currentPatient?.loadSafetyPlanState.pending}
+            error={currentPatient?.loadSafetyPlanState.error}
             actionButtons={[
                 {
                     icon: assigned ? <AssignmentTurnedInIcon /> : <AssignmentIcon />,
@@ -54,58 +72,56 @@ export const SafetyPlan: FunctionComponent = observer(() => {
                     minLine={2}
                     multiline={true}
                     label="Warning Signs"
-                    value={safetyPlan.warningSigns?.join('\n')}
+                    value={formatStringArray(safetyPlan.warningSigns)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
                     label="Coping Strategies"
-                    value={safetyPlan.copingStrategies?.join('\n')}
+                    value={formatStringArray(safetyPlan.copingStrategies)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
-                    label="Distractions"
-                    value={safetyPlan.distractions
-                        ?.map((value) => {
-                            if (value instanceof String) {
-                                return value;
-                            } else if (!!(value as IContact)?.name) {
-                                return (value as IContact)?.name;
-                            }
-                        })
-                        .filter((v) => v != undefined)
-                        .join('\n')}
+                    label="Social Distractions"
+                    value={formatContactArray(safetyPlan.socialDistractions)}
+                />
+                <GridTextField
+                    sm={6}
+                    minLine={2}
+                    multiline={true}
+                    label="Setting Distractions"
+                    value={formatStringArray(safetyPlan.settingDistractions)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
                     label="Social Support"
-                    value={safetyPlan.supporters?.map((value) => value.name).join('\n')}
+                    value={formatContactArray(safetyPlan.supporters)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
                     label="Professional Support"
-                    value={safetyPlan.supporters?.map((value) => value.name).join('\n')}
+                    value={formatContactArray(safetyPlan.professionals)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
                     label="Local Urgent Care Services"
-                    value={safetyPlan.urgentServices?.map((value) => value.name).join('\n')}
+                    value={formatContactArray(safetyPlan.urgentServices)}
                 />
                 <GridTextField
                     sm={6}
                     minLine={2}
                     multiline={true}
                     label="Safe Environment"
-                    value={safetyPlan.safeEnvironment?.join('\n')}
+                    value={formatStringArray(safetyPlan.safeEnvironment)}
                 />
             </Grid>
         </ActionPanel>

@@ -11,14 +11,12 @@ class ConfigService implements IConfigService {
     constructor(baseUrl: string) {
         this.axiosInstance = axios.create({
             baseURL: baseUrl,
-            timeout: 15000,
+            timeout: 1000 * 60 * 2,
         });
     }
 
     public async getServerConfig(): Promise<IAppConfig> {
-        await new Promise((resolve) => setTimeout(() => resolve(null), 3000));
         const response = await this.axiosInstance.get<IAppConfig>('app/config');
-
         return response.data;
     }
 }

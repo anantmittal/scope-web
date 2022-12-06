@@ -1,8 +1,7 @@
 import { action, makeAutoObservable } from 'mobx';
-import { IAppConfig } from 'shared/types';
+import { IAppConfig, IAppContentConfig, IAssessmentContent } from 'shared/types';
 import { AuthStore, IAuthStore } from 'src/stores/AuthStore';
 import { IPatientsStore, PatientsStore } from 'src/stores/PatientsStore';
-import { IPatientStore } from 'src/stores/PatientStore';
 
 export interface IRootStore {
     // Stores
@@ -11,16 +10,11 @@ export interface IRootStore {
 
     // App metadata
     appTitle: string;
-    appConfig: IAppConfig;
+    appContentConfig: IAppContentConfig;
 
-    // UI states
-
-    // Methods
-    load: () => void;
-
-    getPatientByRecordId: (
-        recordId: string | undefined
-    ) => IPatientStore | undefined;
+    // Helpers
+    getAssessmentContent: (assessmentId: string) => IAssessmentContent | undefined;
+    reset: () => void;
 }
 
 export class RootStore implements IRootStore {
@@ -30,31 +24,23 @@ export class RootStore implements IRootStore {
 
     // App metadata
     public appTitle = 'SCOPE Registry';
-    public appConfig: IAppConfig;
+    public appContentConfig: IAppContentConfig;
 
     constructor(serverConfig: IAppConfig) {
-        // As more is added to serverConfig, it will become a type and this will be split up
-        this.appConfig = serverConfig;
+        this.appContentConfig = serverConfig.content;
         this.patientsStore = new PatientsStore();
-        this.authStore = new AuthStore();
+        this.authStore = new AuthStore(serverConfig.auth);
 
         makeAutoObservable(this);
     }
 
     @action.bound
-    public async load() {
-        await this.patientsStore.getPatients();
+    public getAssessmentContent(assessmentId: string) {
+        return this.appContentConfig.assessments.find((s) => s.id.toLowerCase() == assessmentId.toLowerCase());
     }
 
-    public getPatientByRecordId(recordId: string | undefined) {
-        if (!!recordId) {
-            const patient = this.patientsStore.patients.filter(
-                (p) => p.recordId == recordId
-            )[0];
-
-            return patient;
-        }
-
-        return undefined;
+    @action.bound
+    public reset() {
+        this.patientsStore = new PatientsStore();
     }
 }

@@ -1,13 +1,18 @@
-import { CssBaseline } from '@material-ui/core';
-import { ThemeProvider } from '@material-ui/core/styles';
-import { action, configure } from 'mobx';
+import AdapterDateFns from '@mui/lab/AdapterDateFns';
+import LocalizationProvider from '@mui/lab/LocalizationProvider';
+import { CssBaseline } from '@mui/material';
+import { StyledEngineProvider, Theme, ThemeProvider } from '@mui/material/styles';
+import { configure } from 'mobx';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { BrowserRouter } from 'react-router-dom';
 import App from 'src/App';
-import { RootStore } from 'src/stores/RootStore';
-import { StoreProvider } from 'src/stores/stores';
 import createAppTheme from 'src/styles/theme';
+import { isDev } from 'shared/env';
+
+declare module '@mui/styles/defaultTheme' {
+    // eslint-disable-next-line @typescript-eslint/no-empty-interface
+    interface DefaultTheme extends Theme {}
+}
 
 // Strict enforcements for mobx
 configure({
@@ -15,26 +20,22 @@ configure({
     computedRequiresReaction: true,
     reactionRequiresObservable: true,
     // observableRequiresReaction: true,
-    disableErrorBoundaries: true,
+    disableErrorBoundaries: !isDev,
+    useProxies: 'never',
 });
-
-const store = new RootStore();
-
-// TODO: Temporary login
-action(() => store.load())();
 
 const theme = createAppTheme();
 
 ReactDOM.render(
     <React.StrictMode>
         <CssBaseline>
-            <StoreProvider store={store}>
+            <StyledEngineProvider injectFirst>
                 <ThemeProvider theme={theme}>
-                    <BrowserRouter>
+                    <LocalizationProvider dateAdapter={AdapterDateFns}>
                         <App />
-                    </BrowserRouter>
+                    </LocalizationProvider>
                 </ThemeProvider>
-            </StoreProvider>
+            </StyledEngineProvider>
         </CssBaseline>
     </React.StrictMode>,
     document.getElementById('root')
@@ -46,27 +47,3 @@ declare let module: any;
 if (module.hot) {
     module.hot.accept();
 }
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-    // Use the window load event to keep the page load performant
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js');
-    });
-}
-
-const randomNotification = (registration: ServiceWorkerRegistration) => {
-    registration.showNotification('Showing notification from pwa');
-};
-
-// Request notification permission
-
-console.log('Getting Permission');
-Notification.requestPermission().then((result) => {
-    console.log('Got permission response', result);
-    if (result === 'granted') {
-        navigator.serviceWorker.ready.then((registration) => {
-            randomNotification(registration);
-        });
-    }
-});

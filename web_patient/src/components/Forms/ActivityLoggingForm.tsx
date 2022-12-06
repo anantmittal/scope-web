@@ -1,4 +1,5 @@
-import { FormControl, FormControlLabel, Radio, RadioGroup, Slider, TextField, withTheme } from '@material-ui/core';
+import { FormControl, FormControlLabel, Radio, RadioGroup, Slider, Stack, TextField } from '@mui/material';
+import withTheme from '@mui/styles/withTheme';
 import { action } from 'mobx';
 import { observer, useLocalObservable } from 'mobx-react';
 import React, { FunctionComponent } from 'react';
@@ -18,7 +19,7 @@ export interface IActivityLoggingFormProps extends IFormProps {}
 const SliderContainer = withTheme(
     styled.div((props) => ({
         padding: props.theme.spacing(8, 2),
-    }))
+    })),
 );
 
 const PageSuccess: FunctionComponent<{
@@ -37,6 +38,7 @@ const PageSuccess: FunctionComponent<{
             case 'No':
                 return getString('Form_activity_log_success_no');
             case 'SomethingElse':
+            default:
                 return getString('Form_activity_log_success_something_else');
         }
     };
@@ -44,7 +46,7 @@ const PageSuccess: FunctionComponent<{
     const showAlternative = successValue == 'SomethingElse';
 
     return (
-        <div>
+        <Stack spacing={4}>
             <FormSection
                 prompt={getString('Form_activity_log_success_prompt')}
                 subPrompt={activityName}
@@ -90,7 +92,7 @@ const PageSuccess: FunctionComponent<{
                     />
                 </div>
             )}
-        </div>
+        </Stack>
     );
 };
 
@@ -165,17 +167,33 @@ export const ActivityLoggingForm: FunctionComponent<IActivityLoggingFormProps> =
     }));
 
     const dataState = useLocalObservable<IActivityLog>(() => ({
-        scheduleId: task.scheduleId,
+        activityId,
+        scheduledActivityId: task.scheduledActivityId,
         alternative: '',
         comment: '',
         pleasure: 5,
         accomplishment: 5,
         activityName: activity.name,
-        recordedDate: new Date(),
+        recordedDateTime: new Date(),
+        success: '',
     }));
 
     const handleSubmit = action(async () => {
-        return await patientStore.completeScheduledActivity(task, dataState);
+        try {
+            // Some cleaning up of the log data based on completion state
+            if (dataState.success == 'No') {
+                const { pleasure, accomplishment, ...logData } = dataState;
+                await patientStore.completeScheduledActivity({ ...logData });
+            } else if (dataState.success == 'Yes') {
+                const { alternative, ...logData } = dataState;
+                await patientStore.completeScheduledActivity({ ...logData });
+            } else {
+                await patientStore.completeScheduledActivity({ ...dataState });
+            }
+            return !patientStore.loadActivityLogsState.error;
+        } catch {
+            return false;
+        }
     });
 
     const handleValueChange = action((key: string, value: any) => {
@@ -259,6 +277,7 @@ export const ActivityLoggingForm: FunctionComponent<IActivityLoggingFormProps> =
             title={getString('Form_activity_logging_title')}
             isOpen={true}
             canClose={!viewState.hasData}
+            loading={patientStore.loadActivityLogsState.pending}
             pages={getActivityLogPages()}
             onSubmit={handleSubmit}
             submitToast={getString('Form_activity_log_submit_success')}

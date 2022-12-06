@@ -1,24 +1,25 @@
 import _ from 'lodash';
+import { getIdentityServiceInstance, IIdentityService } from 'shared/identityService';
 import { getAppServiceInstance, IAppService } from 'src/services/appService';
-import { getAuthServiceInstance, IAuthService } from 'src/services/authService';
-import { getPatientServiceInstance, IPatientService } from 'src/services/patientService';
+import { getConfigServiceInstance, IConfigService } from 'src/services/configService';
 
 const combineUrl = (baseUrl: string, path: string) => {
     return [baseUrl, path].map((s) => _.trim(s, '/')).join('/');
 };
 
-const authService = getAuthServiceInstance(__API__);
-const appService = getAppServiceInstance(combineUrl(__API__, 'app'));
-const patientService = getPatientServiceInstance(combineUrl(__API__, 'patient'));
+const appService = getAppServiceInstance(combineUrl(CLIENT_CONFIG.flaskBaseUrl, 'app'));
+const configService = getConfigServiceInstance(CLIENT_CONFIG.flaskBaseUrl);
+const identityService = getIdentityServiceInstance(CLIENT_CONFIG.flaskBaseUrl);
 
 export interface IRootService {
-    authService: IAuthService;
     appService: IAppService;
-    patientService: IPatientService;
+    configService: IConfigService;
+    identityService: IIdentityService;
 }
 
-export const useServices = () => ({
-    authService,
-    appService,
-    patientService,
-});
+export const useServices = () =>
+    ({
+        appService,
+        configService,
+        identityService,
+    } as IRootService);

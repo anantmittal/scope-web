@@ -1,4 +1,4 @@
-import DateFnsUtils from '@date-io/date-fns';
+import { DatePicker, TimePicker } from '@mui/lab';
 import {
     Checkbox,
     Chip,
@@ -14,61 +14,39 @@ import {
     ListSubheader,
     MenuItem,
     Select,
+    SelectChangeEvent,
+    Stack,
     Switch,
     TextField,
     Typography,
-    withTheme,
-} from '@material-ui/core';
-import { DatePicker, MuiPickersUtilsProvider, TimePicker } from '@material-ui/pickers';
-import { action } from 'mobx';
+} from '@mui/material';
+import { compareAsc } from 'date-fns';
+import { action, toJS } from 'mobx';
 import { observer, useLocalObservable } from 'mobx-react';
 import React, { Fragment, FunctionComponent } from 'react';
-import { DayOfWeekFlags, daysOfWeekFlagValues } from 'shared/enums';
-import { IActivity, ILifeAreaValueActivity, KeyedMap } from 'shared/types';
+import { DayOfWeek, daysOfWeekValues } from 'shared/enums';
+import { clearTime } from 'shared/time';
+import { IActivity, KeyedMap } from 'shared/types';
 import FormDialog from 'src/components/Forms/FormDialog';
 import FormSection from 'src/components/Forms/FormSection';
 import { IFormProps } from 'src/components/Forms/GetFormDialog';
 import { getRouteParameter, Parameters } from 'src/services/routes';
 import { getString } from 'src/services/strings';
 import { useStores } from 'src/stores/stores';
-import styled from 'styled-components';
 
 export interface IAddEditActivityFormProps extends IFormProps {}
 
-const isFlagSet = (value: DayOfWeekFlags, flag: DayOfWeekFlags) => {
-    return (value & flag) == flag;
-};
-
-const getDayString = (day: DayOfWeekFlags) => {
-    if (day == DayOfWeekFlags.Monday) {
-        return 'Monday';
-    } else if (day == DayOfWeekFlags.Tuesday) {
-        return 'Tuesday';
-    } else if (day == DayOfWeekFlags.Wednesday) {
-        return 'Wednesday';
-    } else if (day == DayOfWeekFlags.Thursday) {
-        return 'Thursday';
-    } else if (day == DayOfWeekFlags.Friday) {
-        return 'Friday';
-    } else if (day == DayOfWeekFlags.Saturday) {
-        return 'Saturday';
-    } else if (day == DayOfWeekFlags.Sunday) {
-        return 'Sunday';
-    }
-    return 'Unknown';
-};
-
-const TextFieldWithBottomMargin = withTheme(
-    styled(TextField)((props) => ({
-        marginBottom: props.theme.spacing(1),
-    }))
-);
+interface ImportableActivity {
+    activity: string;
+    value: string;
+    lifeareaId: string;
+}
 
 export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> = observer(() => {
     const rootStore = useStores();
-    const { patientStore, appConfig } = rootStore;
-    const { valueActivities, values } = patientStore;
-    const { lifeAreas } = appConfig;
+    const { patientStore, appContentConfig } = rootStore;
+    const { valuesInventory } = patientStore;
+    const { lifeAreas } = appContentConfig;
 
     const activityId = getRouteParameter(Parameters.activityId);
 
@@ -78,69 +56,101 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
     }
 
     const viewState = useLocalObservable<{
-        hasData: boolean;
         openActivityDialog: boolean;
     }>(() => ({
-        hasData: false,
         openActivityDialog: false,
     }));
 
     const dataState = useLocalObservable<IActivity>(() => ({
-        activityId: activityId || '',
+        ...activity,
         name: activity?.name || '',
         value: activity?.value || '',
         lifeareaId: activity?.lifeareaId || '',
-        startDate: activity?.startDate || new Date(),
+        startDateTime: activity?.startDateTime || new Date(),
         timeOfDay: activity?.timeOfDay || 9,
         hasReminder: activity?.hasReminder || false,
         reminderTimeOfDay: activity?.reminderTimeOfDay || 9,
         hasRepetition: activity?.hasRepetition || false,
-        repeatDayFlags: activity?.repeatDayFlags || DayOfWeekFlags.None,
+        repeatDayFlags: Object.assign(
+            {},
+            ...daysOfWeekValues.map((x) => ({
+                [x]: !!activity?.repeatDayFlags?.[x],
+            })),
+        ),
         isActive: activity?.isActive || true,
-        isDeleted: activity?.isDeleted || true,
+        isDeleted: activity?.isDeleted || false,
     }));
 
-    const groupedActivities: KeyedMap<ILifeAreaValueActivity[]> = {};
-    valueActivities.forEach((activity) => {
-        const lifearea = activity.lifeareaId;
+    const values = valuesInventory?.values || [];
+    const groupedActivities: KeyedMap<ImportableActivity[]> = {};
+    let activityCount = 0;
+
+    values.forEach((value) => {
+        const lifearea = value.lifeareaId;
         if (!groupedActivities[lifearea]) {
             groupedActivities[lifearea] = [];
         }
 
-        groupedActivities[lifearea].push(activity);
+        value.activities.forEach((activity) => {
+            groupedActivities[lifearea].push({
+                activity: activity.name,
+                value: value.name,
+                lifeareaId: lifearea,
+            });
+
+            activityCount += groupedActivities[lifearea].length;
+        });
     });
 
-    const handleSubmit = action(() => {
-        return patientStore.updateActivity(dataState);
+    const handleSubmit = action(async () => {
+        const activity = toJS(dataState);
+
+        try {
+            if (!!activity.activityId) {
+                await patientStore.updateActivity({
+                    ...dataState,
+                    repeatDayFlags: dataState.hasRepetition ? dataState.repeatDayFlags : undefined,
+                    reminderTimeOfDay: dataState.hasReminder ? dataState.reminderTimeOfDay : undefined,
+                });
+            } else {
+                await patientStore.addActivity({
+                    ...dataState,
+                    repeatDayFlags: dataState.hasRepetition ? dataState.repeatDayFlags : undefined,
+                    reminderTimeOfDay: dataState.hasReminder ? dataState.reminderTimeOfDay : undefined,
+                });
+            }
+
+            return !patientStore.loadActivitiesState.error;
+        } catch {
+            return false;
+        }
     });
 
     const handleOpenImportActivity = action(() => {
         viewState.openActivityDialog = true;
     });
 
-    const handleImportActivityItemClick = action((activity: ILifeAreaValueActivity | undefined) => {
+    const handleImportActivityItemClick = action((activity: ImportableActivity | undefined) => {
         viewState.openActivityDialog = false;
 
         if (!!activity) {
-            dataState.name = activity.name;
-            dataState.value = patientStore.getValueById(activity.valueId)?.name || '';
+            dataState.name = activity.activity;
+            dataState.value = activity.value;
             dataState.lifeareaId = activity.lifeareaId;
         }
     });
 
-    const handleSelectValue = action((event: React.ChangeEvent<{ value: unknown }>) => {
+    const handleSelectValue = action((event: SelectChangeEvent<string>) => {
         dataState.value = event.target.value as string;
     });
 
-    const handleSelectLifearea = action((event: React.ChangeEvent<{ value: unknown }>) => {
+    const handleSelectLifearea = action((event: SelectChangeEvent<string>) => {
         dataState.lifeareaId = event.target.value as string;
     });
 
-    const handleRepeatChange = action((checked: boolean, day: DayOfWeekFlags) => {
-        if (checked) {
-            dataState.repeatDayFlags = dataState.repeatDayFlags | day;
-        } else {
-            dataState.repeatDayFlags &= ~day;
+    const handleRepeatChange = action((checked: boolean, day: DayOfWeek) => {
+        if (dataState.repeatDayFlags != undefined) {
+            dataState.repeatDayFlags[day] = checked;
         }
     });
 
@@ -149,13 +159,13 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
     });
 
     const namePage = (
-        <Fragment>
+        <Stack spacing={4}>
             <FormSection
                 prompt={getString('Form_add_activity_describe_name')}
                 help={getString('Form_add_activity_describe_name_help')}
                 content={
                     <Fragment>
-                        <TextFieldWithBottomMargin
+                        <TextField
                             fullWidth
                             value={dataState.name}
                             onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
@@ -164,9 +174,10 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                             variant="outlined"
                             multiline
                         />
-                        {valueActivities.length > 0 && (
-                            <Grid container justify="flex-end">
+                        {activityCount > 0 && (
+                            <Grid container justifyContent="flex-end">
                                 <Chip
+                                    sx={{ marginTop: 1 }}
                                     variant="outlined"
                                     color="primary"
                                     size="small"
@@ -174,7 +185,7 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                                     onClick={handleOpenImportActivity}
                                 />
                                 <Dialog
-                                    maxWidth="xs"
+                                    maxWidth="phone"
                                     open={viewState.openActivityDialog}
                                     onClose={() => handleImportActivityItemClick(undefined)}>
                                     <DialogTitle>
@@ -183,20 +194,24 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
 
                                     <DialogContent dividers>
                                         <List disablePadding>
-                                            {Object.keys(groupedActivities).map((lifearea) => (
-                                                <Fragment key={lifearea}>
-                                                    <ListSubheader disableGutters>{lifearea}</ListSubheader>
-                                                    {groupedActivities[lifearea].map((activity) => (
-                                                        <ListItem
-                                                            disableGutters
-                                                            button
-                                                            onClick={() => handleImportActivityItemClick(activity)}
-                                                            key={activity.id}>
-                                                            <ListItemText primary={activity.name} />
-                                                        </ListItem>
-                                                    ))}
-                                                </Fragment>
-                                            ))}
+                                            {Object.keys(groupedActivities).map((lifearea) => {
+                                                const lifeareaName =
+                                                    lifeAreas.find((l) => l.id == lifearea)?.name || lifearea;
+                                                return (
+                                                    <Fragment key={lifearea}>
+                                                        <ListSubheader disableGutters>{lifeareaName}</ListSubheader>
+                                                        {groupedActivities[lifearea].map((activity, idx) => (
+                                                            <ListItem
+                                                                disableGutters
+                                                                button
+                                                                onClick={() => handleImportActivityItemClick(activity)}
+                                                                key={idx}>
+                                                                <ListItemText primary={activity.activity} />
+                                                            </ListItem>
+                                                        ))}
+                                                    </Fragment>
+                                                );
+                                            })}
                                         </List>
                                     </DialogContent>
                                 </Dialog>
@@ -212,8 +227,8 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                 help={getString('Form_add_activity_describe_value_help')}
                 content={
                     <Select variant="outlined" value={dataState.value || ''} onChange={handleSelectValue} fullWidth>
-                        {values.map((value) => (
-                            <MenuItem key={value.id} value={value.name}>
+                        {values.map((value, idx) => (
+                            <MenuItem key={idx} value={value.name}>
                                 {value.name}
                             </MenuItem>
                         ))}
@@ -238,11 +253,11 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                     </Select>
                 }
             />
-        </Fragment>
+        </Stack>
     );
 
     const editPage = (
-        <Fragment>
+        <Stack spacing={4}>
             <FormSection
                 prompt={getString('Form_add_activity_describe_name_label')}
                 content={
@@ -257,13 +272,11 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                     />
                 }
             />
-
             <FormSection
                 addPaddingTop
                 prompt={getString('Form_add_activity_describe_value_label')}
                 content={<TextField fullWidth value={dataState.value} disabled variant="outlined" multiline />}
             />
-
             <FormSection
                 addPaddingTop
                 prompt={getString('Form_add_activity_describe_lifearea_label')}
@@ -277,58 +290,62 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                     />
                 }
             />
-        </Fragment>
+        </Stack>
     );
 
     const schedulePage = (
-        <Fragment>
+        <Stack spacing={4}>
             <FormSection
                 prompt={getString(!!activity ? 'Form_add_activity_date_label' : 'Form_add_activity_date')}
                 content={
-                    <MuiPickersUtilsProvider utils={DateFnsUtils}>
-                        <DatePicker
-                            fullWidth
-                            inputVariant="outlined"
-                            format="MM/dd/yyyy"
-                            margin="none"
-                            value={dataState.startDate || ''}
-                            onChange={(date: Date | null) => handleValueChange('startDate', date)}
-                            disablePast={true}
-                            InputLabelProps={{
-                                shrink: true,
-                            }}
-                        />
-                    </MuiPickersUtilsProvider>
+                    <DatePicker
+                        value={dataState.startDateTime || ''}
+                        onChange={(date: Date | null) => handleValueChange('startDateTime', date)}
+                        minDate={activity?.startDateTime || new Date()}
+                        renderInput={(params) => (
+                            <TextField
+                                variant="outlined"
+                                margin="none"
+                                fullWidth
+                                {...params}
+                                InputLabelProps={{
+                                    shrink: true,
+                                    sx: { position: 'relative' },
+                                }}
+                            />
+                        )}
+                    />
                 }
             />
-
             <FormSection
                 addPaddingTop
                 prompt={getString(!!activity ? 'Form_add_activity_time_label' : 'Form_add_activity_time')}
                 content={
-                    <MuiPickersUtilsProvider utils={DateFnsUtils}>
-                        <TimePicker
-                            fullWidth
-                            inputVariant="outlined"
-                            format="hh:mm a"
-                            margin="none"
-                            value={new Date(1, 1, 1, dataState.timeOfDay, 0, 0) || new Date()}
-                            onChange={(date: Date | null) => handleValueChange('timeOfDay', date?.getHours())}
-                            ampm={true}
-                            views={['hours']}
-                            InputLabelProps={{
-                                shrink: true,
-                            }}
-                        />
-                    </MuiPickersUtilsProvider>
+                    <TimePicker
+                        value={new Date(1, 1, 1, dataState.timeOfDay, 0, 0) || new Date()}
+                        onChange={(date: Date | null) => handleValueChange('timeOfDay', date?.getHours())}
+                        renderInput={(params) => (
+                            <TextField
+                                variant="outlined"
+                                margin="none"
+                                fullWidth
+                                {...params}
+                                InputLabelProps={{
+                                    shrink: true,
+                                    sx: { position: 'relative' },
+                                }}
+                            />
+                        )}
+                        ampm={true}
+                        views={['hours']}
+                    />
                 }
             />
-
             <FormSection
                 addPaddingTop
                 prompt={getString(!!activity ? 'Form_add_activity_reminder_section' : 'Form_add_activity_reminder')}
                 content={
-                    <Grid container alignItems="center" spacing={1} justify="flex-start">
+                    <Grid container alignItems="center" spacing={1} justifyContent="flex-start">
                         <Grid item>
                             <Typography>{getString('Form_button_no')}</Typography>
                         </Grid>
@@ -348,43 +365,43 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                     </Grid>
                 }
             />
-
             {dataState.hasReminder && (
                 <FormSection
                     addPaddingTop
                     prompt={getString(
-                        !!activity ? 'Form_add_activity_reminder_time_label' : 'Form_add_activity_reminder_time'
+                        !!activity ? 'Form_add_activity_reminder_time_label' : 'Form_add_activity_reminder_time',
                     )}
                     content={
-                        <MuiPickersUtilsProvider utils={DateFnsUtils}>
-                            <TimePicker
-                                fullWidth
-                                inputVariant="outlined"
-                                format="hh:mm a"
-                                margin="none"
-                                value={new Date(1, 1, 1, dataState.reminderTimeOfDay, 0, 0) || new Date()}
-                                onChange={(date: Date | null) =>
-                                    handleValueChange('reminderTimeOfDay', date?.getHours())
-                                }
-                                ampm={true}
-                                views={['hours']}
-                                InputLabelProps={{
-                                    shrink: true,
-                                }}
-                            />
-                        </MuiPickersUtilsProvider>
+                        <TimePicker
+                            value={new Date(1, 1, 1, dataState.reminderTimeOfDay, 0, 0) || new Date()}
+                            onChange={(date: Date | null) => handleValueChange('reminderTimeOfDay', date?.getHours())}
+                            renderInput={(params) => (
+                                <TextField
+                                    variant="outlined"
+                                    margin="none"
+                                    fullWidth
+                                    {...params}
+                                    InputLabelProps={{
+                                        shrink: true,
+                                        sx: { position: 'relative' },
+                                    }}
+                                />
+                            )}
+                            ampm={true}
+                            views={['hours']}
+                        />
                     }
                 />
             )}
-        </Fragment>
+        </Stack>
     );
 
     const repetitionPage = (
-        <Fragment>
+        <Stack spacing={4}>
             <FormSection
                 prompt={getString(!!activity ? 'Form_add_activity_repetition_section' : 'Form_add_activity_repetition')}
                 content={
-                    <Grid container alignItems="center" spacing={1} justify="flex-start">
+                    <Grid container alignItems="center" spacing={1} justifyContent="flex-start">
                         <Grid item>
                             <Typography>{getString('Form_button_no')}</Typography>
                         </Grid>
@@ -409,24 +426,24 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                 <FormSection
                     addPaddingTop
                     prompt={getString(
-                        !!activity ? 'Form_add_activity_repetition_days_label' : 'Form_add_activity_repetition_days'
+                        !!activity ? 'Form_add_activity_repetition_days_label' : 'Form_add_activity_repetition_days',
                     )}
                     content={
                         <FormGroup row>
-                            {daysOfWeekFlagValues.map((day) => {
+                            {daysOfWeekValues.map((day) => {
                                 return (
                                     <FormControlLabel
                                         key={day}
                                         control={
                                             <Checkbox
-                                                checked={isFlagSet(dataState.repeatDayFlags, day)}
+                                                checked={dataState.repeatDayFlags?.[day]}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                                                     handleRepeatChange((e.target as HTMLInputElement).checked, day)
                                                 }
-                                                value={DayOfWeekFlags.Sunday}
+                                                value={day}
                                             />
                                         }
-                                        label={getDayString(day)}
+                                        label={day}
                                     />
                                 );
                             })}
@@ -434,7 +451,7 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                     }
                 />
             )}
-        </Fragment>
+        </Stack>
     );
 
     const pages = [
@@ -444,11 +461,15 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
         },
         {
             content: schedulePage,
-            canGoNext: true,
+            canGoNext: activity?.startDateTime
+                ? compareAsc(clearTime(activity?.startDateTime), clearTime(dataState.startDateTime)) <= 0
+                : compareAsc(clearTime(new Date()), clearTime(dataState.startDateTime)) <= 0,
         },
         {
             content: repetitionPage,
-            canGoNext: !dataState.hasRepetition || dataState.repeatDayFlags != DayOfWeekFlags.None,
+            canGoNext:
+                !dataState.hasRepetition ||
+                (dataState.repeatDayFlags && Object.values(dataState.repeatDayFlags).filter((v) => v).length > 0),
         },
     ];
 
@@ -458,7 +479,8 @@ export const AddEditActivityForm: FunctionComponent<IAddEditActivityFormProps> =
                 !!dataState.activityId ? getString('Form_edit_activity_title') : getString('Form_add_activity_title')
             }
             isOpen={true}
-            canClose={!viewState.hasData}
+            canClose={false}
+            loading={patientStore.loadActivitiesState.pending}
             pages={pages}
             onSubmit={handleSubmit}
             submitToast={getString('Form_add_activity_submit_success')}></FormDialog>

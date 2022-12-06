@@ -1,17 +1,22 @@
 {
 	"_type": "patient",
 	"identity": {
-		"_type": "identity",
+		"_id": "1",
+		"_type": "patientIdentity",
+		"_set_id": "patientidvalue",
 		"_rev": 1,
-		"name": "patient name?"
+		"patientId": "patientidvalue",
+		"collection": "collection_patientidvalue",
+		"name": "Paul Atreides",
+		"MRN": "11111111"
 	},
-	"patientProfile": {
-		"_type": "patientProfile",
+	"profile": {
+		"_type": "profile",
 		"_rev": 1,
-		"name": "patientName",
-		"MRN": "mrn",
+		"name": "Harry Potter",
+		"MRN": "11111111",
 		"clinicCode": "Transplant – Auto",
-		"birthdate": "1991-08-19 00:00:00",
+		"birthdate": "1991-08-19T00:00:00Z",
 		"sex": "Male",
 		"discussionFlag": {
 			"Flag as safety risk": true,
@@ -39,22 +44,20 @@
 		"_type": "valuesInventory",
 		"_rev": 1,
 		"assigned": true,
-		"assignedDate": "some date",
+		"assignedDateTime": "2012-12-12T12:12:12Z",
 		"values": [
 			{
-				"id": "id",
 				"name": "name",
-				"dateCreated": "",
-				"dateEdited": "",
+				"createdDateTime": "2012-12-12T12:12:12Z",
+				"editedDateTime": "2012-12-12T12:12:12Z",
 				"lifeareaId": "",
 				"activities": [
 					{
-						"id": "id",
 						"name": "name",
-						"valueId": "",
-						"dateCreated": "",
-						"dateEdited": "",
-						"lifeareaId": ""
+						"createdDateTime": "2012-12-12T12:12:12Z",
+						"editedDateTime": "2012-12-12T12:12:12Z",
+						"enjoyment": 5,
+						"importance": 5
 					}
 				]
 			}
@@ -64,37 +67,47 @@
 		"_type": "safetyPlan",
 		"_rev": 1,
 		"assigned": true,
-		"assignedDate": "2010-01-01 00:00:00",
+		"assignedDateTime": "1991-08-19T11:11:11Z",
 		"reasonsForLiving": "reasons",
 		"warningSigns": ["warningSign1", "warningSign2"],
 		"copingStrategies": ["copingStrategies1", "copingStrategies2"],
-		"distractions": ["distractions1", "distractions2"],
-		"supporters": [
+		"socialDistractions": [
 			{
-				"contactType": "Person",
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",
 				"emergencyNumber": "emergencyNumber"
 			},
 			{
-				"contactType": "Service",
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",
 				"emergencyNumber": "emergencyNumber"
 			}
 		],
-		"professionalSupporters": [
+		"settingDistractions": ["setting distractions1", "setting distractions2"],
+		"supporters": [
 			{
-				"contactType": "Person",
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",
 				"emergencyNumber": "emergencyNumber"
 			},
 			{
-				"contactType": "Service",
+				"name": "name",
+				"address": "addresss",
+				"phoneNumber": "phoneNumber",
+				"emergencyNumber": "emergencyNumber"
+			}
+		],
+		"professionals": [
+			{
+				"name": "name",
+				"address": "addresss",
+				"phoneNumber": "phoneNumber",
+				"emergencyNumber": "emergencyNumber"
+			},
+			{
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",
@@ -103,14 +116,12 @@
 		],
 		"urgentServices": [
 			{
-				"contactType": "Person",
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",
 				"emergencyNumber": "emergencyNumber"
 			},
 			{
-				"contactType": "Service",
 				"name": "name",
 				"address": "addresss",
 				"phoneNumber": "phoneNumber",

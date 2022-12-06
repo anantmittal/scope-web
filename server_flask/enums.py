@@ -14,7 +14,6 @@ class ClinicCode(Enum):
     Immunotherapy = "Immunotherapy"
     MelanomaRenal = "Melanoma/Renal"
     Neuro = "Neuro"
-    NWHospital = "NW Hospital"
     Sarcoma = "Sarcoma"
     TransplantAuto = "Transplant – Auto"
     TransplantAllo = "Transplant – Allo"
@@ -37,6 +36,7 @@ class PatientGender(Enum):
     NonBinary = "Non-binary/Non-conforming"
     Other = "Other"
 
+
 class PatientRace(Enum):
     Native = "American Indian or Alaska Native"
     Asian = "Asian or Asian American"
@@ -44,6 +44,7 @@ class PatientRace(Enum):
     Pacific = "Native Hawaiian or Other Pacific Islander"
     White = "White"
     Unknown = "Unknown"
+
 
 class PatientEthnicity(Enum):
     Hispanic = "Hispanic or Latino/Latina/Latinx"
@@ -59,16 +60,19 @@ class PatientPronoun(Enum):
 
 class DepressionTreatmentStatus(Enum):
     CoCM = "CoCM"
-    CoCMRelapse = "CoCM Relapse Prevention"
-    Discharged = "Discharged"
-    Pending = "Pending"
+    CoCMRelapse = "CoCM RP"
+    Discharged = "D/C"
     Other = "Other"
+    End = "End"
 
 
 class FollowupSchedule(Enum):
     OneWeek = "1-week follow-up"
     TwoWeeks = "2-week follow-up"
+    ThreeWeeks = "3-week follow-up"
     FourWeeks = "4-week follow-up"
+    SixWeeks = "6-week follow-up"
+    EightWeeks = "8-week follow-up"
 
 
 class DiscussionFlag(Enum):
@@ -91,7 +95,7 @@ class CancerTreatmentRegimen(Enum):
 class Referral(Enum):
     Psychiatry = "Psychiatry"
     Psychology = "Psychology"
-    PtNavigation = "Pt Navigation"
+    PatienttNavigation = "Patient Navigation"
     IntegrativeMedicine = "Integrative Medicine"
     SpiritualCare = "Spiritual Care"
     PalliativeCare = "Palliative Care"
@@ -160,6 +164,7 @@ class AssessmentFrequency(Enum):
     Weekly = "Once a week"
     Biweekly = "Every 2 weeks"
     Monthly = "Monthly"
+
 
 class DayOfWeek(Enum):
     Monday = "Monday"

@@ -1,20 +1,20 @@
 import EditIcon from '@mui/icons-material/Edit';
-import { Button, Divider, Grid, LinearProgress, Typography } from '@mui/material';
+import { Button, Divider, Grid, LinearProgress, Snackbar, Typography } from '@mui/material';
 import withTheme from '@mui/styles/withTheme';
-import { format } from 'date-fns';
-import { action, observable } from 'mobx';
+import { action, observable, runInAction } from 'mobx';
 import { observer } from 'mobx-react';
-import React, { FunctionComponent } from 'react';
+import React, { FunctionComponent, useEffect, useState } from 'react';
+import { formatDateOnly } from 'shared/time';
 import { IPatientProfile, KeyedMap } from 'shared/types';
 import LabeledField from 'src/components/common/LabeledField';
 import { EditPatientProfileDialog } from 'src/components/PatientDetail/PatientProfileDialog';
-import { usePatient } from 'src/stores/stores';
+import { usePatient, useStores } from 'src/stores/stores';
 import styled from 'styled-components';
 
 const Container = withTheme(
     styled.div((props) => ({
         padding: props.theme.spacing(2.5),
-    }))
+    })),
 );
 
 const Name = styled(Typography)({
@@ -26,7 +26,7 @@ const Name = styled(Typography)({
 const EditButton = withTheme(
     styled(Button)((props) => ({
         marginLeft: props.theme.spacing(1),
-    }))
+    })),
 );
 
 const Header = styled.div({
@@ -44,24 +44,41 @@ const state = observable<{ open: boolean }>({
 
 export interface IPatientCardProps {
     loading?: boolean;
+    error?: boolean;
 }
 
 export const PatientCard: FunctionComponent<IPatientCardProps> = observer((props) => {
-    const { loading } = props;
+    const { loading, error } = props;
     const patient = usePatient();
-    const { profile } = patient;
+    const { patientsStore } = useStores();
+
+    const [openError, setOpenError] = useState(error);
+
+    useEffect(() => {
+        setOpenError(error);
+    }, [error]);
+
+    const handleErrorClose = () => {
+        setOpenError(false);
+    };
 
     const handleClose = action(() => {
         state.open = false;
+        patient.loadProfileState.resetState();
     });
 
     const handleOpen = action(() => {
         state.open = true;
     });
 
-    const onSave = action((newPatient: IPatientProfile) => {
-        patient?.updateProfile(newPatient);
-        state.open = false;
+    const onSave = action(async (newPatient: IPatientProfile) => {
+        await patient.updateProfile(newPatient);
+
+        runInAction(() => {
+            if (!patient.loadProfileState.error) {
+                state.open = false;
+            }
+        });
     });
 
     const generateRaceText = (flags: KeyedMap<boolean | string>) => {
@@ -95,39 +112,55 @@ export const PatientCard: FunctionComponent<IPatientCardProps> = observer((props
 
                 <Grid item>{loading ? <Loading /> : <Divider />}</Grid>
                 <Grid item>
-                    <LabeledField label="mrn" value={profile.MRN} />
-                    <LabeledField label="clinic code" value={profile.clinicCode} />
+                    <LabeledField label="mrn" value={patient.profile.MRN} />
+                    <LabeledField label="clinic code" value={patient.profile.clinicCode} />
                 </Grid>
                 <Grid item>
                     <LabeledField
                         label="dob"
-                        value={!!profile.birthdate ? format(profile.birthdate, 'MM/dd/yyyy') : '--'}
+                        value={
+                            !!patient.profile.birthdate ? formatDateOnly(patient.profile.birthdate, 'MM/dd/yyyy') : '--'
+                        }
                     />
                     <LabeledField label="age" value={patient.age >= 0 ? patient.age : '--'} />
-                    <LabeledField label="sex" value={profile.sex} />
+                    <LabeledField label="sex" value={patient.profile.sex} />
                     <LabeledField
                         label="race"
-                        value={profile.race != undefined ? generateRaceText(profile.race) : 'unknown'}
+                        value={patient.profile.race != undefined ? generateRaceText(patient.profile.race) : 'unknown'}
                     />
-                    <LabeledField label="ethnicity" value={profile.ethnicity} />
-                    <LabeledField label="gender" value={profile.gender} />
-                    <LabeledField label="pronouns" value={profile.pronoun} />
+                    <LabeledField label="ethnicity" value={patient.profile.ethnicity} />
+                    <LabeledField label="gender" value={patient.profile.gender} />
+                    <LabeledField label="pronouns" value={patient.profile.pronoun} />
                 </Grid>
 
                 <Grid item>
                     <LabeledField
                         label="primary oncology provider"
-                        value={profile.primaryOncologyProvider?.name || '--'}
+                        value={patient.profile.primaryOncologyProvider || '--'}
                     />
-                    <LabeledField label="primary social worker" value={profile.primaryCareManager?.name || '--'} />
-                    <LabeledField label="treatment status" value={profile.depressionTreatmentStatus} />
-                    <LabeledField label="follow-up schedule" value={profile.followupSchedule} />
+                    <LabeledField
+                        label="primary social worker"
+                        value={patient.profile.primaryCareManager?.name || '--'}
+                    />
+                    <LabeledField label="treatment status" value={patient.profile.depressionTreatmentStatus} />
+                    <LabeledField label="follow-up schedule" value={patient.profile.followupSchedule} />
                 </Grid>
-                <EditPatientProfileDialog
-                    profile={profile}
-                    open={state.open}
-                    onClose={handleClose}
-                    onSavePatient={onSave}
+                {state.open && (
+                    <EditPatientProfileDialog
+                        careManagers={patientsStore.careManagers}
+                        profile={patient.profile}
+                        open={state.open}
+                        onClose={handleClose}
+                        onSavePatient={onSave}
+                        loading={loading}
+                        error={error}
+                    />
+                )}
+                <Snackbar
+                    open={openError && !state.open}
+                    message={`Sorry, there was an error processing your request. Please try again.`}
+                    autoHideDuration={6000}
+                    onClose={handleErrorClose}
                 />
             </Grid>
         </Container>

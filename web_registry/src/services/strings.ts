@@ -1,10 +1,11 @@
 const _strings = {
     dialog_action_cancel: 'Cancel',
     dialog_action_save: 'Save',
+    dialog_error_text: 'Sorry, we ran into a problem processing your request. Please try again.',
 
     patient_detail_section_behavior_strategies_title: 'Behavioral Strategies',
     patient_detail_section_behavior_strategies_hash: 'behavioral',
-    patient_detail_subsection_values_inventory_title: 'Values Inventory',
+    patient_detail_subsection_values_inventory_title: 'Values & Activities Inventory',
     patient_detail_subsection_values_inventory_hash: 'values',
     patient_detail_subsection_checklist_title: 'Behavioral Activation',
     patient_detail_subsection_checklist_hash: 'checklist',
@@ -20,7 +21,7 @@ const _strings = {
     patient_values_inventory_activity_lifearea_header: 'Life area',
     patient_values_inventory_activity_enjoyment_header: 'Enjoyment',
     patient_values_inventory_activity_importance_header: 'Importance',
-    patient_values_inventory_empty: 'There are no activities defined in the values inventory.',
+    patient_values_inventory_empty: 'There are no activities defined in the values & activities inventory.',
 
     patient_safety_plan_assign_button: 'Assign',
     patient_safety_plan_assigned_button: 'Reassign',

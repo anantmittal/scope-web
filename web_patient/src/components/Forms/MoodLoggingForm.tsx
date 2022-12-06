@@ -1,4 +1,5 @@
-import { Slider, TextField, withTheme } from '@material-ui/core';
+import { Slider, TextField } from '@mui/material';
+import withTheme from '@mui/styles/withTheme';
 import { action } from 'mobx';
 import { observer, useLocalObservable } from 'mobx-react';
 import React, { FunctionComponent } from 'react';
@@ -22,8 +23,7 @@ export const MoodLoggingForm: FunctionComponent<IMoodLoggingFormProps> = observe
     const { patientStore } = useStores();
 
     const dataState = useLocalObservable<IMoodLog>(() => ({
-        recordedDate: new Date(),
-        logId: '',
+        recordedDateTime: new Date(),
         mood: 5,
         comment: undefined,
     }));
@@ -97,8 +97,13 @@ export const MoodLoggingForm: FunctionComponent<IMoodLoggingFormProps> = observe
         ];
     };
 
-    const handleSubmit = action(() => {
-        return patientStore.saveMoodLog({ ...dataState });
+    const handleSubmit = action(async () => {
+        try {
+            await patientStore.saveMoodLog({ ...dataState });
+            return !patientStore.loadMoodLogsState.error;
+        } catch {
+            return false;
+        }
     });
 
     return (
@@ -106,6 +111,7 @@ export const MoodLoggingForm: FunctionComponent<IMoodLoggingFormProps> = observe
             title={getString('Form_mood_logging_title')}
             isOpen={true}
             canClose={!dataState.mood && !dataState.comment}
+            loading={patientStore.loadMoodLogsState.pending}
             pages={getMoodLoggingPages()}
             onSubmit={handleSubmit}
             submitToast={getString('Form_mood_submit_success')}

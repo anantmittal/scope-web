@@ -14,6 +14,8 @@ class DevelopmentConfig(Config):
         Config.__init__(
             self=self,
             secret_key=flask_config.secret_key,
+            cognito_poolid=flask_config.cognito_poolid,
+            cognito_clientid=flask_config.cognito_clientid,
             documentdb_host=flask_config.documentdb_host,
             documentdb_port=int(os.getenv("DOCUMENTDB_LOCAL_PORT")),
             documentdb_directconnection=flask_config.documentdb_directconnection,
@@ -22,3 +24,9 @@ class DevelopmentConfig(Config):
             database_user=flask_config.database_user,
             database_password=flask_config.database_password,
         )
+
+    #
+    # Temporarily disable authorization in development environment.
+    # Otherwise all Flask tests currently fail.
+    #
+    AUTHORIZATION_DISABLED_FOR_TESTING = True

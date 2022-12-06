@@ -5,7 +5,7 @@ from typing import Union
 
 
 @dataclass(frozen=True)
-class DatabaseConfig:
+class DatabaseClientConfig:
     """
     Configuration for a database.
     """
@@ -31,3 +31,6 @@ class DatabaseConfig:
             user=config_dict["user"],
             password=config_dict["password"],
         )
+
+
+DatabaseConfig = DatabaseClientConfig

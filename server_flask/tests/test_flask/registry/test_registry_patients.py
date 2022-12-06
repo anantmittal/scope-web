@@ -1,18 +1,24 @@
-from pprint import pprint
+import http
+import requests
 from typing import Callable
 from urllib.parse import urljoin
 
-import pymongo.database
-import pytest
-import requests
 import scope.config
+import scope.database.collection_utils as collection_utils
 import scope.database.patients
+import scope.schema
+import scope.schema_utils as schema_utils
+import scope.testing.fixtures_database_temp_patient
 import tests.testing_config
 
 TESTING_CONFIGS = tests.testing_config.ALL_CONFIGS
 
+QUERY_PATIENTS = "patients"
+QUERY_PATIENT = "patient/{patient_id}"
+QUERY_PATIENTIDENTITIES = "patientidentities"
 
-def test_get_patients(
+
+def test_patients_get(
     database_temp_patient_factory: Callable[
         [],
         scope.testing.fixtures_database_temp_patient.DatabaseTempPatient,
@@ -26,373 +32,138 @@ def test_get_patients(
 
     session = flask_session_unauthenticated_factory()
 
+    created_ids = [database_temp_patient_factory().patient_id for _ in range(5)]
+
     response = session.get(
         url=urljoin(
             flask_client_config.baseurl,
-            "patients",
+            QUERY_PATIENTS,
         ),
     )
     assert response.ok
 
-    pprint(response.json())
-
-    assert False
-
-
-# TODO: James to Review
-@pytest.mark.skip(reason="Not reviewed")
-def test_flask_get_all_patients(
-    database_client: pymongo.database.Database,
-    flask_client_config: scope.config.FlaskClientConfig,
-    flask_session_unauthenticated_factory: Callable[[], requests.Session],
-    data_fake_patient_factory: Callable[[], dict],
-):
-    """
-    Test that we can get a list of patients.
-    """
-
-    # Generate a fake patient
-    data_fake_patient = data_fake_patient_factory()
-
-    # Insert the fake patient
-    scope.database.patients.create_patient(
-        database=database_client,
-        patient=data_fake_patient,
-    )
-    patient_collection_name = scope.database.patients.collection_for_patient(
-        patient_name=data_fake_patient["identity"]["name"]
-    )
-
-    # Obtain a session
-    session = flask_session_unauthenticated_factory()
-
-    # Retrieve all patients
-    response = session.get(
-        url=urljoin(
-            flask_client_config.baseurl,
-            "patients/",
-        ),
-    )
-    assert response.ok
-
-    # "patients" is a list
-    response_patients = response.json()["patients"]
-
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["assessments"] = sorted(
-        data_fake_patient["assessments"], key=lambda i: i["_id"]
-    )
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["scheduledAssessments"] = sorted(
-        data_fake_patient["scheduledAssessments"], key=lambda i: i["_id"]
-    )
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["assessmentLogs"] = sorted(
-        data_fake_patient["assessmentLogs"], key=lambda i: i["_id"]
-    )
-
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["activities"] = sorted(
-        data_fake_patient["activities"], key=lambda i: i["_id"]
-    )
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["scheduledActivities"] = sorted(
-        data_fake_patient["scheduledActivities"], key=lambda i: i["_id"]
-    )
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["activityLogs"] = sorted(
-        data_fake_patient["activityLogs"], key=lambda i: i["_id"]
-    )
-
-    # For assert to work on two list of dicts, the order needs to be same.
-    data_fake_patient["moodLogs"] = sorted(
-        data_fake_patient["moodLogs"], key=lambda i: i["_id"]
-    )
-
-    for rp in response_patients:
-        rp["assessments"] = sorted(rp["assessments"], key=lambda i: i["_id"])
-        rp["scheduledAssessments"] = sorted(
-            rp["scheduledAssessments"], key=lambda i: i["_id"]
-        )
-        rp["assessmentLogs"] = sorted(rp["assessmentLogs"], key=lambda i: i["_id"])
-
-        rp["activities"] = sorted(rp["activities"], key=lambda i: i["_id"])
-        rp["activityLogs"] = sorted(rp["activityLogs"], key=lambda i: i["_id"])
-        rp["scheduledActivities"] = sorted(
-            rp["scheduledActivities"], key=lambda i: i["_id"]
+    assert "patients" in response.json()
+    patient_documents = response.json()["patients"]
+    for patient_document_current in patient_documents:
+        schema_utils.assert_schema(
+            data=patient_document_current,
+            schema=scope.schema.patient_schema,
         )
 
-        rp["moodLogs"] = sorted(rp["moodLogs"], key=lambda i: i["_id"])
+    retrieved_ids = [
+        patient_document_current["identity"][
+            scope.database.patients.PATIENT_IDENTITY_SEMANTIC_SET_ID
+        ]
+        for patient_document_current in patient_documents
+    ]
+    assert all(patient_id in retrieved_ids for patient_id in created_ids)
 
-    # Ensure list includes our fake patient
-    assert data_fake_patient in response_patients
-
-    scope.database.patients.delete_patient(
-        database=database_client,
-        patient_collection_name=patient_collection_name,
+    schema_utils.assert_schema(
+        data=response.json()["patients"],
+        schema=scope.schema.patients_schema,
     )
 
 
-# TODO: James to Review
-@pytest.mark.skip(reason="Not reviewed")
-def test_flask_get_patient(
-    database_client: pymongo.database.Database,
+def test_patientidentities_get(
+    database_temp_patient_factory: Callable[
+        [],
+        scope.testing.fixtures_database_temp_patient.DatabaseTempPatient,
+    ],
     flask_client_config: scope.config.FlaskClientConfig,
     flask_session_unauthenticated_factory: Callable[[], requests.Session],
-    data_fake_patient_factory: Callable[[], dict],
 ):
     """
-    Test that we can get a patient via patient collection name.
+    Test retrieving patient identities.
     """
 
-    # Generate a fake patient
-    data_fake_patient = data_fake_patient_factory()
-
-    # Insert the fake patient
-    scope.database.patients.create_patient(
-        database=database_client,
-        patient=data_fake_patient,
-    )
-    patient_collection_name = scope.database.patients.collection_for_patient(
-        patient_name=data_fake_patient["identity"]["name"]
-    )
-
-    # Obtain a session
     session = flask_session_unauthenticated_factory()
 
-    # Retrieve the same patient by sending its collection name
+    created_ids = [database_temp_patient_factory().patient_id for _ in range(5)]
+
     response = session.get(
         url=urljoin(
             flask_client_config.baseurl,
-            "patients/{}".format(patient_collection_name),
+            QUERY_PATIENTIDENTITIES,
         ),
     )
     assert response.ok
-    response_json = response.json()
-  
-    # Ensure body of response is our fake patient
-    assert response_json.get("_type") == data_fake_patient.get("_type")
-    assert response_json.get("identity") == data_fake_patient.get("identity")
-    assert response_json.get("patientProfile") == data_fake_patient.get(
-        "patientProfile"
-    )
-    assert response_json.get("clinicalHistory") == data_fake_patient.get(
-        "clinicalHistory"
-    )
-    assert response_json.get("valuesInventory") == data_fake_patient.get(
-        "valuesInventory"
-    )
-    assert response_json.get("safetyPlan") == data_fake_patient.get("safetyPlan")
-    assert response_json.get("sessions") == data_fake_patient.get("sessions")
-    assert response_json.get("caseReviews") == data_fake_patient.get("caseReviews")
 
-    # NOTE: assert response_json["assessmentLogs"] == data_fake_patient["assessmentLogs"] fails because the order of dicts in the two lists is different.
-    assert sorted(response_json["assessments"], key=lambda i: i["_id"]) == sorted(
-        data_fake_patient["assessments"], key=lambda i: i["_id"]
-    )
-    assert sorted(
-        response_json["scheduledAssessments"], key=lambda i: i["_id"]
-    ) == sorted(data_fake_patient["scheduledAssessments"], key=lambda i: i["_id"])
-    assert sorted(response_json["assessmentLogs"], key=lambda i: i["_id"]) == sorted(
-        data_fake_patient["assessmentLogs"], key=lambda i: i["_id"]
-    )
-    assert sorted(response_json["activities"], key=lambda i: i["_id"]) == sorted(
-        data_fake_patient["activities"], key=lambda i: i["_id"]
-    )
-    assert sorted(
-        response_json["scheduledActivities"], key=lambda i: i["_id"]
-    ) == sorted(data_fake_patient["scheduledActivities"], key=lambda i: i["_id"])
-    assert sorted(response_json["activityLogs"], key=lambda i: i["_id"]) == sorted(
-        data_fake_patient["activityLogs"], key=lambda i: i["_id"]
+    assert "patientidentities" in response.json()
+    patient_identity_documents = response.json()["patientidentities"]
+    schema_utils.assert_schema(
+        data=patient_identity_documents,
+        schema=scope.schema.patient_identities_schema,
     )
 
-    assert sorted(response_json["moodLogs"], key=lambda i: i["_id"]) == sorted(
-        data_fake_patient["moodLogs"], key=lambda i: i["_id"]
-    )
+    retrieved_ids = [
+        patient_identity_document_current[
+            scope.database.patients.PATIENT_IDENTITY_SEMANTIC_SET_ID
+        ]
+        for patient_identity_document_current in patient_identity_documents
+    ]
+    assert all(patient_id in retrieved_ids for patient_id in created_ids)
 
-    scope.database.patients.delete_patient(
-        database=database_client,
-        patient_collection_name=patient_collection_name,
-    )
 
-
-# TODO: James to Review
-@pytest.mark.skip(reason="Not reviewed")
-def test_flask_get_nonexistent_patient(
+def test_patient_get(
+    database_temp_patient_factory: Callable[
+        [],
+        scope.testing.fixtures_database_temp_patient.DatabaseTempPatient,
+    ],
     flask_client_config: scope.config.FlaskClientConfig,
     flask_session_unauthenticated_factory: Callable[[], requests.Session],
 ):
     """
-    Test that we get a 404 if we try to get a non-existant patient.
+    Test retrieving a patient.
     """
 
-    # Obtain a session
     session = flask_session_unauthenticated_factory()
 
-    # Attempt to retrieve the patient using the _id
+    created_id = database_temp_patient_factory().patient_id
+
     response = session.get(
         url=urljoin(
             flask_client_config.baseurl,
-            "patients/{}".format("patient_nonexistant"),
+            QUERY_PATIENT.format(patient_id=created_id),
         ),
     )
-    assert response.status_code == 404  # Not Found
+    assert response.ok
+
+    assert "patient" in response.json()
+    patient_document = response.json()["patient"]
+    schema_utils.assert_schema(
+        data=patient_document,
+        schema=scope.schema.patient_schema,
+    )
+
+    patient_identity = patient_document["identity"]
+    patient_id = patient_identity[
+        scope.database.patients.PATIENT_IDENTITY_SEMANTIC_SET_ID
+    ]
+    assert patient_id == created_id
 
 
-# TODO: James to Review
-@pytest.mark.skip(reason="Not reviewed")
-def test_flask_create_patient(
-    database_client: pymongo.database.Database,
+def test_patient_get_invalid(
     flask_client_config: scope.config.FlaskClientConfig,
     flask_session_unauthenticated_factory: Callable[[], requests.Session],
-    data_fake_patient_factory: Callable[[], dict],
 ):
     """
-    Test that we can create a patient.
+    Test non-existent patient yields 404.
     """
 
-    # Generate a fake patient
-    data_fake_patient = data_fake_patient_factory()
-
-    patient_collection_name = scope.database.patients.collection_for_patient(
-        patient_name=data_fake_patient["identity"]["name"]
-    )
-
-    # Obtain a session
     session = flask_session_unauthenticated_factory()
 
-    # Retrieve the same patient using the _id
-    response = session.post(
+    response = session.get(
         url=urljoin(
             flask_client_config.baseurl,
-            "patients/",
+            QUERY_PATIENT.format(patient_id="invalid"),
         ),
-        json=data_fake_patient,
     )
+    assert response.status_code == http.HTTPStatus.NOT_FOUND
 
-    assert response.status_code == 200
-    response_json = response.json()
-
-    # Convert `bson.objectid.ObjectId` to `str`
-    for v in response_json.values():
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["sessions"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["caseReviews"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["assessments"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["scheduledAssessments"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["assessmentLogs"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["activities"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["scheduledActivities"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["activityLogs"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-    for v in response_json["moodLogs"]:
-        if isinstance(v, dict):
-            v.pop("_id", None)
-
-    # Ensure body of response is our fake patient
-    assert response_json["_type"] == data_fake_patient["_type"]
-    assert response_json["identity"] == data_fake_patient["identity"]
-    assert response_json["patientProfile"] == data_fake_patient["patientProfile"]
-    assert response_json["clinicalHistory"] == data_fake_patient["clinicalHistory"]
-    assert response_json["valuesInventory"] == data_fake_patient["valuesInventory"]
-    assert response_json["safetyPlan"] == data_fake_patient["safetyPlan"]
-    assert response_json["sessions"] == data_fake_patient["sessions"]
-    assert response_json["caseReviews"] == data_fake_patient["caseReviews"]
-    assert response_json["assessments"] == data_fake_patient["assessments"]
-
-    # NOTE: assert response_json["assessmentLogs"] == data_fake_patient["assessmentLogs"] fails because the order of dicts in the two lists is different.
-    assert sorted(
-        response_json["assessments"],
-        key=lambda i: (i["_assessment_id"]),
-    ) == sorted(
-        data_fake_patient["assessments"],
-        key=lambda i: (i["_assessment_id"]),
-    )
-    assert sorted(
-        response_json["scheduledAssessments"],
-        key=lambda i: (i["_schedule_id"]),
-    ) == sorted(
-        data_fake_patient["scheduledAssessments"],
-        key=lambda i: (i["_schedule_id"]),
-    )
-    assert sorted(
-        response_json["assessmentLogs"],
-        key=lambda i: (i["_log_id"]),
-    ) == sorted(
-        data_fake_patient["assessmentLogs"],
-        key=lambda i: (i["_log_id"]),
-    )
-
-    assert sorted(
-        response_json["activities"],
-        key=lambda i: (i["_activity_id"]),
-    ) == sorted(
-        data_fake_patient["activities"],
-        key=lambda i: (i["_activity_id"]),
-    )
-    assert sorted(
-        response_json["scheduledActivities"],
-        key=lambda i: (i["_schedule_id"]),
-    ) == sorted(
-        data_fake_patient["scheduledActivities"],
-        key=lambda i: (i["_schedule_id"]),
-    )
-    assert sorted(
-        response_json["activityLogs"],
-        key=lambda i: (i["_log_id"]),
-    ) == sorted(
-        data_fake_patient["activityLogs"],
-        key=lambda i: (i["_log_id"]),
-    )
-
-    assert sorted(response_json["moodLogs"], key=lambda i: (i["_log_id"]),) == sorted(
-        data_fake_patient["moodLogs"],
-        key=lambda i: (i["_log_id"]),
-    )
-
-    scope.database.patients.delete_patient(
-        database=database_client,
-        patient_collection_name=patient_collection_name,
-    )
-
-
-# TODO: James to Review
-@pytest.mark.skip(reason="Not reviewed")
-def test_flask_update_patient_405(
-    database_client: pymongo.database.Database,
-    flask_client_config: scope.config.FlaskClientConfig,
-    flask_session_unauthenticated_factory: Callable[[], requests.Session],
-    data_fake_patient_factory: Callable[[], dict],
-):
-    """
-    Test that we get a 405 if we try to PUT patient.
-    """
-
-    # Obtain a session
-    session = flask_session_unauthenticated_factory()
-
-    # Update the same patient by sending its collection name
-    response = session.put(
+    response = session.get(
         url=urljoin(
             flask_client_config.baseurl,
-            "patients/{}".format("patient_nonexistant"),
+            QUERY_PATIENT.format(patient_id=collection_utils.generate_set_id()),
         ),
-        json={},
     )
-    assert response.status_code == 405
+    assert response.status_code == http.HTTPStatus.NOT_FOUND

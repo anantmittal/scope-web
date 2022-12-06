@@ -40,7 +40,6 @@ export const clinicCodeValues = [
     'Immunotherapy',
     'Melanoma/Renal',
     'Neuro',
-    'NW Hospital',
     'Sarcoma',
     'Transplant – Auto',
     'Transplant – Allo',
@@ -53,10 +52,10 @@ export type ClinicCode = typeof clinicCodeValues[number];
 
 export type AllClinicCode = 'All Clinics';
 
-export const depressionTreatmentStatusValues = ['CoCM', 'CoCM Relapse Prevention', 'Discharged', 'Pending'] as const;
-export type DepressionTreatmentStatus = typeof depressionTreatmentStatusValues[number] | OtherSpecify;
+export const depressionTreatmentStatusValues = ['CoCM', 'CoCM RP', 'D/C', 'Other', 'End'] as const;
+export type DepressionTreatmentStatus = typeof depressionTreatmentStatusValues[number];
 
-export const followupScheduleValues = ['1-week follow-up', '2-week follow-up', '4-week follow-up'] as const;
+export const followupScheduleValues = ['1-week follow-up', '2-week follow-up', "3-week follow-up", "4-week follow-up", "6-week follow-up", "8-week follow-up"] as const;
 export type FollowupSchedule = typeof followupScheduleValues[number];
 
 export const discussionFlagValues = ['Flag as safety risk', 'Flag for discussion'] as const;
@@ -124,18 +123,18 @@ export const behavioralStrategyChecklistValues = [
 ] as const;
 export type BehavioralStrategyChecklistItem = typeof behavioralStrategyChecklistValues[number] | OtherSpecify;
 
-export const assessmentFrequencyValues = ['Daily', 'Once a week', 'Every 2 weeks', 'Monthly', 'None'] as const;
+export const assessmentFrequencyValues = ['Once a week', 'Every 2 weeks', 'Every 4 weeks'] as const;
 export type AssessmentFrequency = typeof assessmentFrequencyValues[number];
 
 export const phq9ItemValues = [
     'Interest',
-    'Feeling',
+    'Mood',
     'Sleep',
-    'Tired',
+    'Energy',
     'Appetite',
-    'Failure',
+    'Guilt',
     'Concentrating',
-    'Slowness',
+    'Motor',
     'Suicide',
 ] as const;
 export type PHQ9Item = typeof phq9ItemValues[number];
@@ -158,34 +157,10 @@ export type EntryType = SessionEntryType | CaseReviewEntryType;
 export const daysOfWeekValues = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
 export type DayOfWeek = typeof daysOfWeekValues[number];
-
-export enum DayOfWeekFlags {
-    None = 0,
-    Sunday = 1 << 0,
-    Monday = 1 << 1,
-    Tuesday = 1 << 2,
-    Wednesday = 1 << 3,
-    Thursday = 1 << 4,
-    Friday = 1 << 5,
-    Saturday = 1 << 6,
-    All = ~(~0 << 7),
-}
-
-export const daysOfWeekFlagValues = [
-    DayOfWeekFlags.Monday,
-    DayOfWeekFlags.Tuesday,
-    DayOfWeekFlags.Wednesday,
-    DayOfWeekFlags.Thursday,
-    DayOfWeekFlags.Friday,
-    DayOfWeekFlags.Saturday,
-    DayOfWeekFlags.Sunday,
-] as const;
+export type DayOfWeekFlags = { [item in DayOfWeek]: boolean };
 
 export const activitySuccessTypeValues = ['Yes', 'SomethingElse', 'No'];
 export type ActivitySuccessType = typeof activitySuccessTypeValues[number];
-
-export const contactTypeValues = ['Person', 'Service'];
-export type ContactType = typeof contactTypeValues[number];
 
 export type BAChecklistFlags = { [item in BehavioralActivationChecklistItem]: boolean };
 export type BehavioralStrategyChecklistFlags = { [item in BehavioralStrategyChecklistItem]: boolean };
@@ -196,3 +171,9 @@ export type DiscussionFlags = { [item in DiscussionFlag]: boolean };
 
 export const dueTypeValues = ['Exact', 'ChunkOfDay', 'Day', 'Week'];
 export type DueType = typeof dueTypeValues[number];
+
+export const providerRoleValues = ['studyStaff', 'psychiatrist', 'socialWorker'];
+export type ProviderRole = typeof providerRoleValues[number];
+
+export const siteValues = ['SCCA – SLU', 'SCCA – UW-NW', 'SCCA – PEN', 'MultiCare – Tacoma', 'MultiCare – Gig Harbor'];
+export type Site = typeof siteValues[number];

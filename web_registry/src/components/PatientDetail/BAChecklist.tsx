@@ -10,10 +10,11 @@ import {
     TableHead,
     TableRow,
 } from '@mui/material';
-import { compareAsc, format } from 'date-fns';
+import { compareAsc } from 'date-fns';
 import { observer } from 'mobx-react';
 import React, { Fragment, FunctionComponent } from 'react';
 import { BehavioralActivationChecklistItem, behavioralActivationChecklistValues } from 'shared/enums';
+import { formatDateOnly } from 'shared/time';
 import { IResourceItem, ISession, KeyedMap } from 'shared/types';
 import ActionPanel from 'src/components/common/ActionPanel';
 import { getString } from 'src/services/strings';
@@ -21,7 +22,7 @@ import { usePatient, useStores } from 'src/stores/stores';
 
 export const BAChecklist: FunctionComponent = observer(() => {
     const {
-        appConfig: { resources },
+        appContentConfig: { registryresources },
     } = useStores();
     const currentPatient = usePatient();
 
@@ -38,7 +39,7 @@ export const BAChecklist: FunctionComponent = observer(() => {
             });
         });
 
-    const resourcesMap = Object.assign({}, ...resources.map((r) => ({ [r.id]: r.resources }))) as KeyedMap<
+    const resourcesMap = Object.assign({}, ...registryresources.map((r) => ({ [r.id]: r.resources }))) as KeyedMap<
         IResourceItem[]
     >;
 
@@ -49,6 +50,10 @@ export const BAChecklist: FunctionComponent = observer(() => {
         resources: resourcesMap[ba],
     }));
 
+    const otherResources = resourcesMap[`Other`];
+
+    const swResources = resourcesMap[`swresources`];
+
     const getResourceLink = (filename: string) => {
         return `/resources/${filename}`;
     };
@@ -57,7 +62,8 @@ export const BAChecklist: FunctionComponent = observer(() => {
         <ActionPanel
             id={getString('patient_detail_subsection_checklist_hash')}
             title={getString('patient_detail_subsection_checklist_title')}
-            loading={currentPatient?.state == 'Pending'}
+            loading={currentPatient?.loadPatientState.pending || currentPatient?.loadSessionsState.pending}
+            error={currentPatient?.loadSessionsState.error}
             actionButtons={[]}>
             <TableContainer>
                 <Table>
@@ -74,9 +80,9 @@ export const BAChecklist: FunctionComponent = observer(() => {
                                     <Fragment>
                                         <div>{component.name}</div>
                                         {component.completedDate ? (
-                                            <FormHelperText>{`Last performed on ${format(
+                                            <FormHelperText>{`Last performed on ${formatDateOnly(
                                                 component.completedDate as Date,
-                                                'MM/dd/yyyy'
+                                                'MM/dd/yyyy',
                                             )}`}</FormHelperText>
                                         ) : (
                                             <FormHelperText>
@@ -90,8 +96,8 @@ export const BAChecklist: FunctionComponent = observer(() => {
                                         <List dense disablePadding>
                                             {component.resources &&
                                                 component.resources.length > 0 &&
-                                                component.resources.map((resource) => (
-                                                    <ListItem dense disableGutters key={resource.name}>
+                                                component.resources.map((resource, idx) => (
+                                                    <ListItem dense disableGutters key={`${resource.name}-${idx}`}>
                                                         <Link href={getResourceLink(resource.filename)} target="_blank">
                                                             {resource.name}
                                                         </Link>
@@ -102,6 +108,42 @@ export const BAChecklist: FunctionComponent = observer(() => {
                                 </TableCell>
                             </TableRow>
                         ))}
+                        <TableRow>
+                            <TableCell component="th" scope="row" style={{ verticalAlign: 'top' }}>
+                                Other Patient Resources
+                            </TableCell>
+                            <TableCell>
+                                <List dense disablePadding>
+                                    {otherResources &&
+                                        otherResources.length > 0 &&
+                                        otherResources.map((resource, idx) => (
+                                            <ListItem dense disableGutters key={`${resource.name}-${idx}`}>
+                                                <Link href={getResourceLink(resource.filename)} target="_blank">
+                                                    {resource.name}
+                                                </Link>
+                                            </ListItem>
+                                        ))}
+                                </List>
+                            </TableCell>
+                        </TableRow>
+                        <TableRow>
+                            <TableCell component="th" scope="row" style={{ verticalAlign: 'top' }}>
+                                Social Worker Resources
+                            </TableCell>
+                            <TableCell>
+                                <List dense disablePadding>
+                                    {swResources &&
+                                        swResources.length > 0 &&
+                                        swResources.map((resource, idx) => (
+                                            <ListItem dense disableGutters key={`${resource.name}-${idx}`}>
+                                                <Link href={getResourceLink(resource.filename)} target="_blank">
+                                                    {resource.name}
+                                                </Link>
+                                            </ListItem>
+                                        ))}
+                                </List>
+                            </TableCell>
+                        </TableRow>
                     </TableBody>
                 </Table>
             </TableContainer>

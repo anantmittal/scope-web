@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import pymongo.collection
 import pymongo.database
 import pytest
 from typing import Callable
@@ -11,16 +10,17 @@ import scope.database.patients
 @dataclass(frozen=True)
 class DatabaseTempPatient:
     patient_id: str
-    patient_document: dict
+    patient_identity: dict
     collection: pymongo.collection.Collection
 
 
 @pytest.fixture(name="database_temp_patient_factory")
 def fixture_database_temp_patient_factory(
     database_client: pymongo.database.Database,
+    data_fake_patient_profile_factory: Callable[[], dict],
 ) -> Callable[[], DatabaseTempPatient]:
     """
-    Fixture for temp_patient_factory.
+    Fixture for database_temp_patient_factory.
 
     Provides a factory for obtaining a patient backed by a corresponding collection.
     Removes any temporary patients that are created by obtained factory.
@@ -29,15 +29,21 @@ def fixture_database_temp_patient_factory(
     # List of patients created by the factory
     temp_patients: List[DatabaseTempPatient] = []
 
-    # Actual factory for obtaining a client for a temporary Collection.
+    # Actual factory for obtaining a temporary patient.
     def factory() -> DatabaseTempPatient:
-        temp_patient_document_create = scope.database.patients.create_patient(database=database_client)
+        temp_patient_profile = data_fake_patient_profile_factory()
+        temp_patient_identity = scope.database.patients.create_patient(
+            database=database_client,
+            patient_name=temp_patient_profile["name"],
+            patient_mrn=temp_patient_profile["MRN"],
+        )
+
         temp_patient = DatabaseTempPatient(
-            patient_id=temp_patient_document_create["_set_id"],
-            patient_document=temp_patient_document_create,
+            patient_id=temp_patient_identity["_set_id"],
+            patient_identity=temp_patient_identity,
             collection=database_client.get_collection(
-                name=temp_patient_document_create["collection"]
-            )
+                name=temp_patient_identity["collection"]
+            ),
         )
 
         temp_patients.append(temp_patient)

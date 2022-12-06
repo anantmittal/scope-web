@@ -1,3 +1,5 @@
+import AddIcon from '@mui/icons-material/Add';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import {
     Button,
     Divider,
@@ -11,17 +13,15 @@ import {
     MenuItem,
     Switch,
     Typography,
-    withTheme,
-} from '@material-ui/core';
-import AddIcon from '@material-ui/icons/Add';
-import MoreVertIcon from '@material-ui/icons/MoreVert';
+} from '@mui/material';
+import withTheme from '@mui/styles/withTheme';
 import { format, isSameDay } from 'date-fns';
-import { action, toJS } from 'mobx';
+import { action } from 'mobx';
 import { observer, useLocalObservable } from 'mobx-react';
 import React, { Fragment, FunctionComponent } from 'react';
-import { useHistory } from 'react-router';
+import { useNavigate } from 'react-router';
 import { Link } from 'react-router-dom';
-import { DayOfWeekFlags } from 'shared/enums';
+import { DayOfWeekFlags, daysOfWeekValues } from 'shared/enums';
 import { IActivity, IScheduledActivity, KeyedMap } from 'shared/types';
 import Calendar from 'src/components/CarePlan/Calendar';
 import { MainPage } from 'src/components/common/MainPage';
@@ -39,17 +39,18 @@ const CompactList = withTheme(
         'li>.MuiListItemIcon-root': {
             minWidth: 36,
         },
-    }))
+    })),
 );
 
 export const CarePlanPage: FunctionComponent = observer(() => {
     const rootStore = useStores();
     const {
         patientStore,
-        appConfig: { lifeAreas },
+        appContentConfig: { lifeAreas },
     } = rootStore;
-    const { taskItems, activities } = patientStore;
-    const history = useHistory();
+    const { taskItems } = patientStore;
+    const activities = patientStore.activities.filter((a) => !a.isDeleted);
+    const navigate = useNavigate();
     const viewState = useLocalObservable<{
         selectedDate: Date;
         showActivities: boolean;
@@ -57,12 +58,12 @@ export const CarePlanPage: FunctionComponent = observer(() => {
         selectedActivity: IActivity | undefined;
     }>(() => ({
         selectedDate: new Date(),
-        showActivities: false,
+        showActivities: true,
         moreTargetEl: undefined,
         selectedActivity: undefined,
     }));
 
-    const selectedTaskItems = taskItems.filter((t) => isSameDay(t.dueDate, viewState.selectedDate));
+    const selectedTaskItems = taskItems.filter((t) => isSameDay(t.dueDateTime, viewState.selectedDate));
     const groupedActivities: KeyedMap<IActivity[]> = {};
     activities.forEach((activity) => {
         const lifearea = activity.lifeareaId || getString('Careplan_activities_uncategorized');
@@ -82,46 +83,47 @@ export const CarePlanPage: FunctionComponent = observer(() => {
     });
 
     const handleTaskClick = action((item: IScheduledActivity) => () => {
-        history.push(
+        navigate(
             getFormPath(ParameterValues.form.activityLog, {
                 [Parameters.activityId]: item.activityId,
-                [Parameters.taskId]: item.scheduleId,
-            })
+                [Parameters.taskId]: item.scheduledActivityId,
+            }),
         );
     });
 
     const getRepeatDateText = (days: DayOfWeekFlags) => {
-        let dayString = '';
-        if ((days & DayOfWeekFlags.All) == DayOfWeekFlags.All) {
-            dayString = 'Everyday';
+        if (Object.values(days).filter((v) => v).length == daysOfWeekValues.length) {
+            return 'Everyday';
         } else {
             const dayStrings = new Array<string>();
-            if ((days & DayOfWeekFlags.Monday) == DayOfWeekFlags.Monday) {
-                dayStrings.push('M');
-            }
-            if ((days & DayOfWeekFlags.Tuesday) == DayOfWeekFlags.Tuesday) {
-                dayStrings.push('Tu');
-            }
-            if ((days & DayOfWeekFlags.Wednesday) == DayOfWeekFlags.Wednesday) {
-                dayStrings.push('W');
-            }
-            if ((days & DayOfWeekFlags.Thursday) == DayOfWeekFlags.Thursday) {
-                dayStrings.push('Tr');
-            }
-            if ((days & DayOfWeekFlags.Friday) == DayOfWeekFlags.Friday) {
-                dayStrings.push('F');
-            }
-            if ((days & DayOfWeekFlags.Saturday) == DayOfWeekFlags.Saturday) {
-                dayStrings.push('Sa');
-            }
-            if ((days & DayOfWeekFlags.Sunday) == DayOfWeekFlags.Sunday) {
-                dayStrings.push('Su');
-            }
 
-            dayString = dayStrings.join(', ');
+            daysOfWeekValues.forEach((day) => {
+                if (days[day]) {
+                    if (day == 'Monday') {
+                        dayStrings.push('M');
+                    }
+                    if (day == 'Tuesday') {
+                        dayStrings.push('Tu');
+                    }
+                    if (day == 'Wednesday') {
+                        dayStrings.push('W');
+                    }
+                    if (day == 'Thursday') {
+                        dayStrings.push('Tr');
+                    }
+                    if (day == 'Friday') {
+                        dayStrings.push('F');
+                    }
+                    if (day == 'Saturday') {
+                        dayStrings.push('Sa');
+                    }
+                    if (day == 'Sunday') {
+                        dayStrings.push('Su');
+                    }
+                }
+            });
+            return dayStrings.join(', ');
         }
-
-        return `${dayString}`;
     };
 
     const handleMoreClick = action((activity: IActivity, event: React.MouseEvent<HTMLElement>) => {
@@ -136,18 +138,26 @@ export const CarePlanPage: FunctionComponent = observer(() => {
 
     const handleActivate = action(() => {
         if (!!viewState.selectedActivity) {
-            const activityCopy = toJS(viewState.selectedActivity);
+            const activityCopy = viewState.selectedActivity;
             activityCopy.isActive = !activityCopy.isActive;
-            patientStore.updateActivity(activityCopy);
+            patientStore.updateActivity({
+                ...activityCopy,
+                repeatDayFlags: activityCopy.hasRepetition ? activityCopy.repeatDayFlags : undefined,
+                reminderTimeOfDay: activityCopy.hasReminder ? activityCopy.reminderTimeOfDay : undefined,
+            });
             handleMoreClose();
         }
     });
 
     const handleDelete = action(() => {
         if (!!viewState.selectedActivity) {
-            const activityCopy = toJS(viewState.selectedActivity);
+            const activityCopy = viewState.selectedActivity;
             activityCopy.isDeleted = true;
-            patientStore.updateActivity(activityCopy);
+            patientStore.updateActivity({
+                ...activityCopy,
+                repeatDayFlags: activityCopy.hasRepetition ? activityCopy.repeatDayFlags : undefined,
+                reminderTimeOfDay: activityCopy.hasReminder ? activityCopy.reminderTimeOfDay : undefined,
+            });
             handleMoreClose();
         }
     });
@@ -160,7 +170,7 @@ export const CarePlanPage: FunctionComponent = observer(() => {
                     {getString('Careplan_add_activity')}
                 </Button>
             }>
-            <Grid container alignItems="center" spacing={1} justify="center">
+            <Grid container alignItems="center" spacing={1} justifyContent="center">
                 <Grid item>
                     <Typography color={viewState.showActivities ? 'textSecondary' : 'textPrimary'}>
                         {getString('Careplan_view_calendar')}
@@ -188,79 +198,87 @@ export const CarePlanPage: FunctionComponent = observer(() => {
                         keepMounted
                         open={Boolean(viewState.moreTargetEl)}
                         onClose={handleMoreClose}>
-                        <MenuItem button onClick={handleActivate}>
+                        <MenuItem onClick={handleActivate}>
                             {getString(
                                 viewState.selectedActivity?.isActive
                                     ? 'Careplan_activity_item_deactivate'
-                                    : 'Careplan_activity_item_activate'
+                                    : 'Careplan_activity_item_activate',
                             )}
                         </MenuItem>
-                        <MenuItem button onClick={handleDelete}>
-                            {getString('Careplan_activity_item_delete')}
-                        </MenuItem>
+                        <MenuItem onClick={handleDelete}>{getString('Careplan_activity_item_delete')}</MenuItem>
                     </Menu>
-                    {Object.keys(groupedActivities).map((lifeareaId) => {
-                        const activities = groupedActivities[lifeareaId];
-                        const lifearea =
-                            lifeAreas.find((la) => la.id == lifeareaId)?.name ||
-                            getString('Careplan_activities_uncategorized');
-                        return (
-                            <Section title={lifearea} key={lifearea}>
-                                <CompactList aria-labelledby="nested-list-subheader">
-                                    {activities.map((activity, idx) => (
-                                        <Fragment key={activity.activityId}>
-                                            <ListItem
-                                                alignItems="flex-start"
-                                                button
-                                                component={Link}
-                                                to={getFormLink(ParameterValues.form.editActivity, {
-                                                    [Parameters.activityId]: activity.activityId,
-                                                })}>
-                                                <ListItemText
-                                                    style={{ opacity: activity.isActive ? 1 : 0.5 }}
-                                                    secondaryTypographyProps={{
-                                                        component: 'div',
-                                                    }}
-                                                    primary={<Typography noWrap>{activity.name}</Typography>}
-                                                    secondary={
-                                                        <Fragment>
-                                                            <Typography variant="body2" component="div">
-                                                                {`${getString('Careplan_activity_item_value')}: ${
-                                                                    activity.value
-                                                                }`}
-                                                            </Typography>
-                                                            <Typography variant="body2" component="span">
-                                                                {`${getString(
-                                                                    'Careplan_activity_item_start_date'
-                                                                )} ${format(activity.startDate, 'MM/dd/yy')}`}
-                                                            </Typography>
-                                                            {activity.hasRepetition && activity.repeatDayFlags && (
-                                                                <Typography variant="body2" component="span">
-                                                                    {`; ${getString(
-                                                                        'Careplan_activity_item_repeat'
-                                                                    )} ${getRepeatDateText(activity.repeatDayFlags)}`}
+                    {activities.length > 0 ? (
+                        Object.keys(groupedActivities).map((lifeareaId) => {
+                            const activities = groupedActivities[lifeareaId];
+                            const lifearea =
+                                lifeAreas.find((la) => la.id == lifeareaId)?.name ||
+                                getString('Careplan_activities_uncategorized');
+                            return (
+                                <Section title={lifearea} key={lifearea}>
+                                    <CompactList aria-labelledby="nested-list-subheader">
+                                        {activities.map((activity, idx) => (
+                                            <Fragment key={activity.activityId}>
+                                                <ListItem
+                                                    alignItems="flex-start"
+                                                    button
+                                                    component={Link}
+                                                    to={getFormLink(ParameterValues.form.editActivity, {
+                                                        [Parameters.activityId as string]:
+                                                            activity.activityId as string,
+                                                    })}>
+                                                    <ListItemText
+                                                        style={{ opacity: activity.isActive ? 1 : 0.5 }}
+                                                        secondaryTypographyProps={{
+                                                            component: 'div',
+                                                        }}
+                                                        primary={<Typography noWrap>{activity.name}</Typography>}
+                                                        secondary={
+                                                            <Fragment>
+                                                                <Typography variant="body2" component="div">
+                                                                    {`${getString('Careplan_activity_item_value')}: ${
+                                                                        activity.value
+                                                                    }`}
                                                                 </Typography>
-                                                            )}
-                                                        </Fragment>
-                                                    }
-                                                />
+                                                                <Typography variant="body2" component="span">
+                                                                    {`${getString(
+                                                                        'Careplan_activity_item_start_date',
+                                                                    )} ${format(activity.startDateTime, 'MM/dd/yy')}`}
+                                                                </Typography>
+                                                                {activity.hasRepetition && activity.repeatDayFlags && (
+                                                                    <Typography variant="body2" component="span">
+                                                                        {`; ${getString(
+                                                                            'Careplan_activity_item_repeat',
+                                                                        )} ${getRepeatDateText(
+                                                                            activity.repeatDayFlags,
+                                                                        )}`}
+                                                                    </Typography>
+                                                                )}
+                                                            </Fragment>
+                                                        }
+                                                    />
 
-                                                <ListItemSecondaryAction>
-                                                    <IconButton
-                                                        edge="end"
-                                                        aria-label="more"
-                                                        onClick={(e) => handleMoreClick(activity, e)}>
-                                                        <MoreVertIcon />
-                                                    </IconButton>
-                                                </ListItemSecondaryAction>
-                                            </ListItem>
-                                            {idx < activities.length - 1 && <Divider variant="middle" />}
-                                        </Fragment>
-                                    ))}
-                                </CompactList>
-                            </Section>
-                        );
-                    })}
+                                                    <ListItemSecondaryAction>
+                                                        <IconButton
+                                                            edge="end"
+                                                            aria-label="more"
+                                                            onClick={(e) => handleMoreClick(activity, e)}
+                                                            size="large">
+                                                            <MoreVertIcon />
+                                                        </IconButton>
+                                                    </ListItemSecondaryAction>
+                                                </ListItem>
+                                                {idx < activities.length - 1 && <Divider variant="middle" />}
+                                            </Fragment>
+                                        ))}
+                                    </CompactList>
+                                </Section>
+                            );
+                        })
+                    ) : (
+                        <Section title={getString('Careplan_add_activity')}>
+                            <Typography variant="body2">{getString('Careplan_no_activities')}</Typography>
+                        </Section>
+                    )}
                 </div>
             ) : (
                 <div>
@@ -271,7 +289,7 @@ export const CarePlanPage: FunctionComponent = observer(() => {
                         {selectedTaskItems.length > 0 ? (
                             <CompactList subheader={<li />}>
                                 {selectedTaskItems.map((item, idx) => (
-                                    <Fragment key={item.scheduleId}>
+                                    <Fragment key={item.scheduledActivityId}>
                                         <ScheduledListItem item={item} onClick={handleTaskClick(item)} />
                                         {idx < selectedTaskItems.length - 1 && <Divider variant="middle" />}
                                     </Fragment>

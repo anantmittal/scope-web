@@ -1,15 +1,15 @@
-import random
-from datetime import datetime
-from typing import Callable
-
 import faker
 import pytest
+import random
+from typing import Callable
+
 import scope.database.patient.clinical_history
+import scope.enums
 import scope.schema
-import scope.testing.fake_data.enums
+import scope.schema_utils
 import scope.testing.fake_data.fake_utils as fake_utils
 
-OPTIONAL_PROPERTIES = [
+OPTIONAL_KEYS = [
     "primaryCancerDiagnosis",
     "dateOfCancerDiagnosis",
     "currentTreatmentRegimen",
@@ -23,20 +23,30 @@ OPTIONAL_PROPERTIES = [
 
 
 def fake_clinical_history_factory(
-    *, faker_factory: faker.Faker, validate: bool = True
+    *,
+    faker_factory: faker.Faker,
 ) -> Callable[[], dict]:
     """
-    Obtain a factory that will generate fake patient clinical history documents.
+    Obtain a factory that will generate fake clinical history documents.
     """
 
     def factory() -> dict:
+        # This date is not actually a date, is intentionally flexible
+        dateFormat = random.choice(
+            [
+                "%x",
+                "%B %Y",
+                "%Y",
+            ]
+        )
+        dateOfCancerDiagnosis = faker_factory.date_object().strftime(dateFormat)
 
         fake_clinical_history = {
             "_type": scope.database.patient.clinical_history.DOCUMENT_TYPE,
             "primaryCancerDiagnosis": faker_factory.text(),
-            "dateOfCancerDiagnosis": faker_factory.date(),
+            "dateOfCancerDiagnosis": dateOfCancerDiagnosis,
             "currentTreatmentRegimen": fake_utils.fake_enum_flag_values(
-                scope.testing.fake_data.enums.CancerTreatmentRegimen
+                scope.enums.CancerTreatmentRegimen
             ),
             "currentTreatmentRegimenOther": faker_factory.text(),
             "currentTreatmentRegimenNotes": faker_factory.text(),
@@ -47,14 +57,10 @@ def fake_clinical_history_factory(
         }
 
         # Remove a randomly sampled subset of optional parameters.
-        for key in fake_utils.fake_sample_random_values(OPTIONAL_PROPERTIES):
-            del fake_clinical_history[key]
-
-        if validate:
-            scope.schema.raise_for_invalid(
-                schema=scope.schema.clinical_history_schema,
-                document=fake_clinical_history,
-            )
+        fake_clinical_history = fake_utils.fake_optional(
+            document=fake_clinical_history,
+            optional_keys=OPTIONAL_KEYS,
+        )
 
         return fake_clinical_history
 
@@ -69,7 +75,18 @@ def fixture_data_fake_clinical_history_factory(
     Fixture for data_fake_clinical_history_factory.
     """
 
-    return fake_clinical_history_factory(
+    unvalidated_factory = fake_clinical_history_factory(
         faker_factory=faker,
-        validate=True,
     )
+
+    def factory() -> dict:
+        fake_clinical_history = unvalidated_factory()
+
+        scope.schema_utils.xfail_for_invalid_schema(
+            schema=scope.schema.clinical_history_schema,
+            data=fake_clinical_history,
+        )
+
+        return fake_clinical_history
+
+    return factory

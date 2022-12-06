@@ -14,7 +14,7 @@ import ActionPanel, { IActionButton } from 'src/components/common/ActionPanel';
 import { GridDropdownField } from 'src/components/common/GridField';
 import { Table } from 'src/components/common/Table';
 import { getString } from 'src/services/strings';
-import { usePatient } from 'src/stores/stores';
+import { usePatient, useStores } from 'src/stores/stores';
 
 export interface IMedicationProgressProps {
     assessment: IAssessment;
@@ -23,8 +23,11 @@ export interface IMedicationProgressProps {
 
 export const MedicationProgress: FunctionComponent<IMedicationProgressProps> = observer((props) => {
     const currentPatient = usePatient();
+    const rootStore = useStores();
 
     const { assessment, assessmentLogs } = props;
+
+    const assessmentContent = rootStore.getAssessmentContent(assessment.assessmentId);
 
     const state = useLocalObservable<{
         openConfigure: boolean;
@@ -40,17 +43,15 @@ export const MedicationProgress: FunctionComponent<IMedicationProgressProps> = o
         state.openConfigure = false;
     });
 
-    const handleConfigure = action(() => {
-        state.openConfigure = true;
-        state.frequency = assessment.frequency || 'None';
-        state.dayOfWeek = assessment.dayOfWeek || 'Monday';
-    });
+    // const handleConfigure = action(() => {
+    //     state.openConfigure = true;
+    //     state.frequency = assessment.frequency || 'Every 2 weeks';
+    //     state.dayOfWeek = assessment.dayOfWeek || 'Monday';
+    // });
 
     const onSaveConfigure = action(() => {
         const { frequency, dayOfWeek } = state;
-        var newAssessment = { ...assessment } as Partial<IAssessment>;
-        newAssessment.frequency = frequency;
-        newAssessment.dayOfWeek = dayOfWeek;
+        var newAssessment = { ...assessment, frequency, dayOfWeek };
         currentPatient.updateAssessment(newAssessment);
         state.openConfigure = false;
     });
@@ -63,16 +64,16 @@ export const MedicationProgress: FunctionComponent<IMedicationProgressProps> = o
         state.dayOfWeek = dow;
     });
 
-    const sortedLogs = assessmentLogs?.slice().sort((a, b) => compareDesc(a.recordedDate, b.recordedDate));
+    const sortedLogs = assessmentLogs?.slice().sort((a, b) => compareDesc(a.recordedDateTime, b.recordedDateTime));
 
     const tableData = sortedLogs?.map((a) => {
         return {
-            date: format(a.recordedDate, 'MM/dd/yy'),
+            date: format(a.recordedDateTime, 'MM/dd/yy'),
             adherence:
                 a.pointValues['Adherence'] == 1
                     ? getString('patient_progress_medication_adherence_yes')
                     : getString('patient_progress_medication_adherence_no'),
-            id: a.logId,
+            id: a.assessmentLogId,
             comment: a.comment,
         };
     });
@@ -104,28 +105,31 @@ export const MedicationProgress: FunctionComponent<IMedicationProgressProps> = o
         },
     ];
 
-    const recurrence = assessment.assigned
-        ? `${assessment.frequency} on ${assessment.dayOfWeek}s, assigned on ${format(
-              assessment.assignedDate,
-              'MM/dd/yyyy'
-          )}`
-        : 'Not assigned';
+    const recurrence =
+        assessment.assigned && assessment.assignedDateTime
+            ? `${assessment.frequency} on ${assessment.dayOfWeek}s, assigned on ${format(
+                  assessment.assignedDateTime,
+                  'MM/dd/yyyy',
+              )}`
+            : 'Not assigned';
 
     return (
         <ActionPanel
             id={assessment.assessmentId}
-            title={assessment.assessmentName}
+            title={assessmentContent?.name || 'Unknown assessment'}
             inlineTitle={recurrence}
-            loading={currentPatient?.state == 'Pending'}
+            loading={currentPatient?.loadPatientState.pending || currentPatient?.loadAssessmentLogsState.pending}
+            error={currentPatient?.loadAssessmentLogsState.error}
             actionButtons={[
                 {
                     icon: assessment.assigned ? <AssignmentTurnedInIcon /> : <AssignmentIcon />,
                     text: assessment.assigned
                         ? getString('patient_progress_assessment_assigned_button')
                         : getString('patient_progress_assessment_assign_button'),
-                    onClick: assessment.assigned
-                        ? undefined
-                        : () => currentPatient?.assignAssessment(assessment.assessmentId),
+                    // Temporarily disable assignment
+                    // onClick: assessment.assigned
+                    //     ? undefined
+                    //     : () => currentPatient?.assignAssessment(assessment.assessmentId),
                 } as IActionButton,
             ].concat(
                 assessment.assigned
@@ -133,10 +137,11 @@ export const MedicationProgress: FunctionComponent<IMedicationProgressProps> = o
                           {
                               icon: <SettingsIcon />,
                               text: getString('patient_progress_assessment_action_configure'),
-                              onClick: handleConfigure,
+                              // Temporarily disable assignment
+                              //   onClick: handleConfigure,
                           } as IActionButton,
                       ]
-                    : []
+                    : [],
             )}>
             <Grid container alignItems="stretch">
                 {!!sortedLogs && sortedLogs.length > 0 && (

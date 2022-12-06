@@ -5,7 +5,6 @@ import {
     BehavioralStrategyChecklistFlags,
     CancerTreatmentRegimenFlags,
     ClinicCode,
-    ContactType,
     DayOfWeek,
     DayOfWeekFlags,
     DepressionTreatmentStatus,
@@ -18,20 +17,31 @@ import {
     PatientPronoun,
     PatientRaceFlags,
     PatientSex,
+    ProviderRole,
     Referral,
     ReferralStatus,
     SessionType,
+    Site,
 } from './enums';
 
 export type KeyedMap<T> = { [key: string]: T };
 
-export interface IUser extends IIdentity {
-    authToken: string;
+export interface IIdentity {
+    name: string;
 }
 
-export interface IIdentity {
-    identityId: string;
-    name: string;
+export interface IPatientIdentity extends IIdentity {
+    patientId: string;
+}
+
+export interface IProviderIdentity extends IIdentity {
+    providerId: string;
+    role: ProviderRole;
+}
+
+export interface IProviderUser extends IProviderIdentity {
+    authToken: string;
+    refreshToken: string;
 }
 
 export interface IReferralStatus {
@@ -43,7 +53,7 @@ export interface IReferralStatus {
 export type ISessionOrCaseReview = ISession | ICaseReview;
 
 export interface ISession {
-    sessionId: string;
+    sessionId?: string;
     date: Date;
     sessionType: SessionType;
     billableMinutes: number;
@@ -65,9 +75,9 @@ export interface ISession {
 }
 
 export interface ICaseReview {
-    reviewId: string;
+    caseReviewId?: string;
     date: Date;
-    consultingPsychiatrist: IIdentity;
+    consultingPsychiatrist: IProviderIdentity;
 
     medicationChange: string;
     behavioralStrategyChange: string;
@@ -79,35 +89,36 @@ export interface ICaseReview {
 
 export interface IAssessment {
     assessmentId: string;
-    assessmentName: string;
     assigned: boolean;
-    assignedDate: Date;
-    frequency: AssessmentFrequency;
-    dayOfWeek: DayOfWeek;
+    assignedDateTime?: Date;
+    frequency?: AssessmentFrequency;
+    dayOfWeek?: DayOfWeek;
 }
 
 export interface IActivity {
-    activityId: string;
+    activityId?: string;
     name: string;
     value: string;
     lifeareaId: string;
-    startDate: Date;
+    startDateTime: Date;
     timeOfDay: number;
     hasReminder: boolean;
-    reminderTimeOfDay: number;
+    reminderTimeOfDay?: number;
     hasRepetition: boolean;
-    repeatDayFlags: DayOfWeekFlags;
+    repeatDayFlags?: DayOfWeekFlags;
     isActive: boolean;
     isDeleted: boolean;
 }
 
 export interface IScheduledItem {
-    scheduleId: string;
-    dueDate: Date;
+    // dueDate: Date; // Contains only the date with 00 time, not used
+    dueDateTime: Date; // Contains timezone adjusted date time
     dueType: DueType;
 }
 
 export interface IScheduledActivity extends IScheduledItem {
+    scheduledActivityId: string;
+
     activityId: string;
     activityName: string;
     reminder: Date;
@@ -116,21 +127,24 @@ export interface IScheduledActivity extends IScheduledItem {
 }
 
 export interface IScheduledAssessment extends IScheduledItem {
+    scheduledAssessmentId: string;
+
     assessmentId: string;
-    assessmentName: string;
 
     completed: boolean;
 }
 export type AssessmentData = KeyedMap<number | undefined>;
 
 export interface ILog {
-    logId?: string; // Should these be optional until committed?
-    recordedDate: Date;
+    recordedDateTime: Date;
     comment?: string;
 }
 
 export interface IActivityLog extends ILog {
-    scheduleId: string;
+    activityLogId?: string;
+
+    scheduledActivityId: string;
+    activityId: string;
     activityName: string;
 
     completed?: boolean;
@@ -141,18 +155,20 @@ export interface IActivityLog extends ILog {
 }
 
 export interface IAssessmentLog extends ILog {
-    scheduleId: string;
-    assessmentId: string; // NEW
-    assessmentName: string;
+    assessmentLogId?: string;
 
-    completed: boolean;
+    scheduledAssessmentId: string;
+    assessmentId: string; // NEW
+
     patientSubmitted?: boolean; // NEW
-    submittedBy?: IIdentity;
+    submittedByProviderId?: string;
     pointValues: AssessmentData;
     totalScore?: number;
 }
 
 export interface IMoodLog extends ILog {
+    moodLogId?: string;
+
     mood: number;
 }
 
@@ -166,15 +182,18 @@ export interface IPatientProfile {
     pronoun?: PatientPronoun;
     race?: PatientRaceFlags;
     ethnicity?: PatientEthnicity;
-    primaryOncologyProvider?: IIdentity;
-    primaryCareManager?: IIdentity;
+    primaryOncologyProvider?: string;
+    primaryCareManager?: IProviderIdentity;
     discussionFlag?: DiscussionFlags;
     followupSchedule?: FollowupSchedule;
     depressionTreatmentStatus?: DepressionTreatmentStatus;
+    site?: Site;
 }
 
 export interface IClinicalHistory {
     primaryCancerDiagnosis?: string;
+    // Date is a string to allow flexibility for social worker.
+    // This particular date is never used for any computations.
     dateOfCancerDiagnosis?: string;
     currentTreatmentRegimen?: CancerTreatmentRegimenFlags;
     currentTreatmentRegimenOther?: string;
@@ -186,7 +205,6 @@ export interface IClinicalHistory {
 }
 
 export interface IContact {
-    contactType: ContactType;
     name: string;
     address?: string;
     phoneNumber?: string;
@@ -195,22 +213,23 @@ export interface IContact {
 
 export interface ISafetyPlan {
     assigned: boolean;
-    assignedDate: Date;
-    lastUpdatedDate?: Date;
+    assignedDateTime?: Date;
+    lastUpdatedDateTime?: Date;
     reasonsForLiving?: string;
     warningSigns?: string[];
     copingStrategies?: string[];
-    distractions?: (string | IContact)[];
+    socialDistractions?: IContact[];
+    settingDistractions?: string[];
     supporters?: IContact[];
-    professionalSupporters?: IContact[];
+    professionals?: IContact[];
     urgentServices?: IContact[];
     safeEnvironment?: string[];
 }
 
 export interface IValuesInventory {
     assigned: boolean;
-    assignedDate: Date;
-    lastUpdatedDate?: Date;
+    assignedDateTime?: Date;
+    lastUpdatedDateTime?: Date;
     values?: ILifeAreaValue[];
 }
 
@@ -221,27 +240,23 @@ export interface ILifeAreaContent {
 }
 
 export interface ILifeAreaValue {
-    id: string;
     name: string;
-    dateCreated: Date;
-    dateEdited: Date;
+    createdDateTime: Date;
+    editedDateTime: Date;
     lifeareaId: string;
     activities: ILifeAreaValueActivity[];
 }
 
 export interface ILifeAreaValueActivity {
-    id: string;
     name: string;
-    valueId: string;
-    dateCreated: Date;
-    dateEdited: Date;
-    lifeareaId: string;
+    createdDateTime: Date;
+    editedDateTime: Date;
     enjoyment?: number;
     importance?: number;
 }
 
 export interface IPatient {
-    identity: IIdentity;
+    identity: IPatientIdentity;
 
     // Patient info
     profile: IPatientProfile;
@@ -273,41 +288,27 @@ export interface IPatientList {
     patients: IPatient[];
 }
 
-export interface IAppConfig {
-    assessments: IAssessmentContent[];
-    lifeAreas: ILifeAreaContent[];
-    resources: IResourceContent[];
-}
-
-export interface IAssessmentContent {
-    id: string;
-    name: string;
-    instruction: string;
-    questions: { question: string; id: string }[];
-    options: { text: string; value: number }[];
-}
-
-export interface IResourceContent {
-    id: string;
-    name: string;
-    resources: IResourceItem[];
-}
-
-export interface IResourceItem {
-    name: string;
-    filename: string;
-}
-
 export interface IPatientConfig {
     assignedValuesInventory: boolean;
     assignedSafetyPlan: boolean;
-    assignedAssessmentIds: string[];
+    assignedScheduledAssessments: IScheduledAssessment[];
 }
 
 export interface IAppConfig {
+    auth: IAppAuthConfig;
+    content: IAppContentConfig;
+}
+
+export interface IAppAuthConfig {
+    poolid: string;
+    clientid: string;
+}
+
+export interface IAppContentConfig {
     assessments: IAssessmentContent[];
     lifeAreas: ILifeAreaContent[];
-    resources: IResourceContent[];
+    patientresources: IResourceContent[];
+    registryresources: IResourceContent[];
 }
 
 export interface IAssessmentContent {
@@ -327,6 +328,7 @@ export interface ILifeAreaContent {
 }
 
 export interface IResourceContent {
+    id: string;
     name: string;
     resources: IResourceItem[];
 }

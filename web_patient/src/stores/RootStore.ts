@@ -1,7 +1,7 @@
 import { action, computed, makeAutoObservable } from 'mobx';
-import { IAppConfig, IAssessmentContent, ILifeAreaContent, IUser } from 'shared/types';
-import { defaultAppConfig } from 'src/services/configs';
-import { PromiseQuery, PromiseState } from 'src/services/promiseQuery';
+import { IAppConfig, IAppContentConfig, IAssessmentContent, ILifeAreaContent } from 'shared/types';
+import { getPatientServiceInstance, IPatientService } from 'shared/patientService';
+import { PromiseQuery, PromiseState } from 'shared/promiseQuery';
 import { useServices } from 'src/services/services';
 import { AuthStore, IAuthStore } from 'src/stores/AuthStore';
 import { IPatientStore, PatientStore } from 'src/stores/PatientStore';
@@ -13,12 +13,13 @@ export interface IRootStore {
 
     // App metadata
     appTitle: string;
-    appConfig: IAppConfig;
+    appContentConfig: IAppContentConfig;
 
     // UI states
     loadState: PromiseState;
-    loginState: PromiseState;
     inspirationalQuote: string;
+
+    createPatientStore: (patientService: IPatientService) => void;
 
     // Helpers
     getAssessmentContent: (assessmentId: string) => IAssessmentContent | undefined;
@@ -26,9 +27,8 @@ export interface IRootStore {
 
     // Data load/save
     load: () => void;
+    reset: () => void;
 }
-
-export type NavigationPath = 'home' | 'careplan' | 'progress' | 'profile';
 
 export class RootStore implements IRootStore {
     // Stores
@@ -36,74 +36,71 @@ export class RootStore implements IRootStore {
     public authStore: IAuthStore;
 
     // App metadata
-    public appTitle = 'SCOPE for Patients';
+    public appTitle = 'SCOPE App';
+    public appContentConfig: IAppContentConfig;
 
     // UI states
 
     // Promise queries
-    private readonly loginQuery: PromiseQuery<IUser | undefined>;
-    private readonly configQuery: PromiseQuery<IAppConfig>;
     private readonly quoteQuery: PromiseQuery<string>;
     private readonly loadQuery: PromiseQuery<PromiseSettledResult<void>[]>;
 
-    constructor() {
-        this.patientStore = new PatientStore();
-        this.authStore = new AuthStore();
+    constructor(serverConfig: IAppConfig) {
+        this.authStore = new AuthStore(serverConfig.auth);
 
-        this.loginQuery = new PromiseQuery(undefined, 'loginQuery');
-        this.configQuery = new PromiseQuery(defaultAppConfig, 'configQuery');
+        // Create a dummy patient store which should fail if tried to access
+        this.patientStore = new PatientStore(getPatientServiceInstance(CLIENT_CONFIG.flaskBaseUrl, 'invalid'));
+
         this.quoteQuery = new PromiseQuery('', 'quoteQuery');
         this.loadQuery = new PromiseQuery([], 'loadQuery');
+
+        this.appContentConfig = serverConfig.content;
 
         makeAutoObservable(this);
     }
 
     @computed
-    public get loginState() {
-        return this.loginQuery.state;
-    }
-
-    @computed
     public get loadState() {
-        if (this.loadQuery.state == 'Pending') {
-            return this.loadQuery.state;
+        if (
+            this.loadQuery.pending ||
+            this.patientStore?.loadPatientState.pending ||
+            this.patientStore?.loadConfigState.pending
+        ) {
+            return 'Pending';
+        } else if (
+            this.loadQuery.error ||
+            this.patientStore?.loadPatientState.error ||
+            this.patientStore?.loadConfigState.error
+        ) {
+            return 'Rejected';
         } else {
-            return this.patientStore.loadState;
+            return this.patientStore?.loadPatientState.state || 'Unknown';
         }
-    }
-
-    @computed
-    public get appConfig() {
-        return this.configQuery.value || defaultAppConfig;
     }
 
     @computed
     public get inspirationalQuote() {
         return this.quoteQuery.value || '';
     }
+    @action.bound
+    public async createPatientStore(patientService: IPatientService) {
+        // This is a bit twisted, but patient store/service doesn't make sense to exist until we have a patient id, and it makes more sense for the store to own the service.
+        this.patientStore = new PatientStore(patientService);
+    }
 
     @action.bound
     public getAssessmentContent(assessmentId: string) {
-        return this.appConfig.assessments.find((s) => s.name.toLowerCase() == assessmentId.toLowerCase());
+        return this.appContentConfig.assessments.find((s) => s.id.toLowerCase() == assessmentId.toLowerCase());
     }
 
     @action.bound
     public getLifeAreaContent(lifearea: string) {
-        return this.appConfig.lifeAreas.find((la) => la.id == lifearea);
+        return this.appContentConfig.lifeAreas.find((la) => la.id == lifearea);
     }
 
     @action.bound
     public async load() {
-        await this.loadQuery.fromPromise(
-            Promise.allSettled([this.loadAppConfig(), this.loadQuotes(), this.patientStore.load()])
-        );
-    }
-
-    @action.bound
-    public async loadAppConfig() {
-        const { appService } = useServices();
-        const promise = appService.getAppConfig();
-        await this.configQuery.fromPromise(promise);
+        await this.loadQuery.fromPromise(Promise.allSettled([this.loadQuotes(), this.patientStore.load()]));
     }
 
     @action.bound
@@ -111,5 +108,10 @@ export class RootStore implements IRootStore {
         const { appService } = useServices();
         const promise = appService.getInspirationalQuote();
         await this.quoteQuery.fromPromise(promise);
+    }
+
+    @action.bound
+    public reset() {
+        this.patientStore = new PatientStore(getPatientServiceInstance(CLIENT_CONFIG.flaskBaseUrl, 'invalid'));
     }
 }

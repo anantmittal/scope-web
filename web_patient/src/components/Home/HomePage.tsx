@@ -1,17 +1,9 @@
-import {
-    Avatar,
-    Divider,
-    List,
-    ListItem,
-    ListItemAvatar,
-    ListItemText,
-    Typography,
-    withTheme,
-} from '@material-ui/core';
+import { Avatar, Divider, List, ListItem, ListItemAvatar, ListItemText, Typography } from '@mui/material';
+import withTheme from '@mui/styles/withTheme';
 import { action } from 'mobx';
 import { observer } from 'mobx-react';
 import React, { Fragment, FunctionComponent } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { IScheduledActivity } from 'shared/types';
 import { MainPage } from 'src/components/common/MainPage';
 import ScheduledListItem from 'src/components/common/ScheduledListItem';
@@ -30,21 +22,30 @@ const CompactList = withTheme(
         'li>.MuiListItemIcon-root': {
             minWidth: 36,
         },
-    }))
+    })),
 );
 
 export const HomePage: FunctionComponent = observer(() => {
     const rootStore = useStores();
-    const history = useHistory();
-    const { todayItems, config, scheduledAssessments } = rootStore.patientStore;
+    const navigate = useNavigate();
 
     const onTaskClick = action((item: IScheduledActivity) => () => {
-        history.push(
+        navigate(
             getFormPath(ParameterValues.form.activityLog, {
                 [Parameters.activityId]: item.activityId,
-                [Parameters.taskId]: item.scheduleId,
-            })
+                [Parameters.taskId]: item.scheduledActivityId,
+            }),
         );
+    });
+
+    const onSafetyPlanClick = action(() => {
+        navigate(Routes.resources);
+        navigate(getFormPath(ParameterValues.form.safetyPlan));
+    });
+
+    const onValuesInventoryClick = action(() => {
+        navigate(Routes.resources);
+        navigate(`${Routes.resources}/${Routes.valuesInventory}`);
     });
 
     return (
@@ -56,10 +57,11 @@ export const HomePage: FunctionComponent = observer(() => {
             ) : null}
             <Section title={getString('Home_things_title')}>
                 <CompactList>
-                    {!!config.assignedValuesInventory && (
-                        <ListItem button component={Link} to={Routes.valuesInventory}>
+                    {!!rootStore.patientStore.config.assignedValuesInventory && (
+                        <ListItem button onClick={onValuesInventoryClick}>
                             <ListItemAvatar>
                                 <Avatar
+                                    variant="square"
                                     alt={getString('Home_values_button_text')}
                                     src={getImage('Home_values_button_image')}
                                 />
@@ -67,11 +69,13 @@ export const HomePage: FunctionComponent = observer(() => {
                             <ListItemText primary={getString('Home_values_button_text')} />
                         </ListItem>
                     )}
-                    {config.assignedValuesInventory && config.assignedSafetyPlan && <Divider variant="middle" />}
-                    {!!config.assignedSafetyPlan && (
-                        <ListItem button>
+                    {rootStore.patientStore.config.assignedValuesInventory &&
+                        rootStore.patientStore.config.assignedSafetyPlan && <Divider variant="middle" />}
+                    {!!rootStore.patientStore.config.assignedSafetyPlan && (
+                        <ListItem button onClick={onSafetyPlanClick}>
                             <ListItemAvatar>
                                 <Avatar
+                                    variant="square"
                                     alt={getString('Home_safety_button_text')}
                                     src={getImage('Home_safety_button_image')}
                                 />
@@ -79,58 +83,68 @@ export const HomePage: FunctionComponent = observer(() => {
                             <ListItemText primary={getString('Home_safety_button_text')} />
                         </ListItem>
                     )}
-                    {(config.assignedValuesInventory || config.assignedSafetyPlan) && <Divider variant="middle" />}
-                    {scheduledAssessments &&
-                        scheduledAssessments.length > 0 &&
-                        scheduledAssessments.map((assessment) => (
-                            <Fragment key={assessment.scheduleId}>
-                                <ListItem
-                                    button
-                                    component={Link}
-                                    to={getFormPath(ParameterValues.form.assessmentLog, {
-                                        [Parameters.taskId]: assessment.scheduleId,
-                                        [Parameters.assessmentId]: assessment.assessmentId,
-                                    })}>
-                                    <ListItemAvatar>
-                                        <Avatar
-                                            alt={getString('Home_assessment_button_text').replace(
+                    {(rootStore.patientStore.config.assignedValuesInventory ||
+                        rootStore.patientStore.config.assignedSafetyPlan) && <Divider variant="middle" />}
+                    {rootStore.patientStore.assessmentsToComplete &&
+                        rootStore.patientStore.assessmentsToComplete.length > 0 &&
+                        rootStore.patientStore.assessmentsToComplete.map((assessment) => {
+                            const assessmentContent = rootStore.getAssessmentContent(assessment.assessmentId);
+
+                            return (
+                                <Fragment key={assessment.scheduledAssessmentId}>
+                                    <ListItem
+                                        button
+                                        component={Link}
+                                        to={getFormPath(ParameterValues.form.assessmentLog, {
+                                            [Parameters.taskId]: assessment.scheduledAssessmentId,
+                                            [Parameters.assessmentId]: assessment.assessmentId,
+                                        })}>
+                                        <ListItemAvatar>
+                                            <Avatar
+                                                variant="square"
+                                                alt={getString('Home_assessment_button_text').replace(
+                                                    '${assessment}',
+                                                    assessmentContent?.name || 'Unknown assessment',
+                                                )}
+                                                src={getImage('Home_safety_button_image')}
+                                            />
+                                        </ListItemAvatar>
+                                        <ListItemText
+                                            primary={getString('Home_assessment_button_text').replace(
                                                 '${assessment}',
-                                                assessment.assessmentName
+                                                assessmentContent?.name || 'Unknown assessment',
                                             )}
-                                            src={getImage('Home_safety_button_image')}
                                         />
-                                    </ListItemAvatar>
-                                    <ListItemText
-                                        primary={getString('Home_assessment_button_text').replace(
-                                            '${assessment}',
-                                            assessment.assessmentName
-                                        )}
-                                    />
-                                </ListItem>
-                                <Divider variant="middle" />
-                            </Fragment>
-                        ))}
+                                    </ListItem>
+                                    <Divider variant="middle" />
+                                </Fragment>
+                            );
+                        })}
                     <ListItem button component={Link} to={getFormLink(ParameterValues.form.moodLog)}>
                         <ListItemAvatar>
-                            <Avatar alt={getString('Home_mood_button_text')} src={getImage('Home_mood_button_image')} />
+                            <Avatar
+                                variant="square"
+                                alt={getString('Home_mood_button_text')}
+                                src={getImage('Home_mood_button_image')}
+                            />
                         </ListItemAvatar>
                         <ListItemText primary={getString('Home_mood_button_text')} />
                     </ListItem>
                 </CompactList>
             </Section>
             <Section title={getString('Home_plan_title')}>
-                <CompactList>
-                    {!!todayItems && todayItems.length > 0 ? (
-                        todayItems.map((item, idx) => (
-                            <Fragment>
-                                <ScheduledListItem key={item.scheduleId} item={item} onClick={onTaskClick(item)} />
-                                {idx < todayItems.length - 1 && <Divider variant="middle" />}
+                {!!rootStore.patientStore.todayItems && rootStore.patientStore.todayItems.length > 0 ? (
+                    <CompactList>
+                        {rootStore.patientStore.todayItems.map((item, idx) => (
+                            <Fragment key={`${item.scheduledActivityId}-${idx}`}>
+                                <ScheduledListItem item={item} onClick={onTaskClick(item)} />
+                                {idx < rootStore.patientStore.todayItems.length - 1 && <Divider variant="middle" />}
                             </Fragment>
-                        ))
-                    ) : (
-                        <Typography variant="body2">{getString('Home_plan_done')}</Typography>
-                    )}
-                </CompactList>
+                        ))}
+                    </CompactList>
+                ) : (
+                    <Typography variant="body2">{getString('Home_plan_done')}</Typography>
+                )}
             </Section>
         </MainPage>
     );

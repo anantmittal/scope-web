@@ -1,62 +1,92 @@
-import http
-from functools import wraps
+import flask
+import flask_json
+import pymongo.errors
 
+import request_context
+import request_utils
 import scope.database
 import scope.database.patient.values_inventory
-from flask import Blueprint, abort, current_app, jsonify, request
-from flask_json import as_json
-from request_context import request_context
-from scope.schema import values_inventory_schema
-from utils import validate_schema
+import scope.schema
 
-registry_values_inventory_blueprint = Blueprint(
-    "registry_values_inventory_blueprint", __name__, url_prefix="/patients"
+values_inventory_blueprint = flask.Blueprint(
+    "values_inventory_blueprint",
+    __name__,
 )
 
 
-# NOTE: Passing the patient collection name for now. Will fix this after auth workflow is finalized.
-@registry_values_inventory_blueprint.route(
-    "/<string:patient_collection>/values", methods=["GET"]
+@values_inventory_blueprint.route(
+    "/<string:patient_id>/valuesinventory",
+    methods=["GET"],
 )
-@as_json
-def get_patient_values(patient_collection):
-    context = request_context()
+@flask_json.as_json
+def get_values_inventory(patient_id):
+    context = request_context.authorized_for_patient(patient_id=patient_id)
+    patient_collection = context.patient_collection(patient_id=patient_id)
 
-    result = scope.database.patient.values_inventory.get_values_inventory(
-        database=context.database, collection_name=patient_collection
+    # Get the document
+    document = scope.database.patient.values_inventory.get_values_inventory(
+        collection=patient_collection,
     )
 
-    if result:
-        return result, http.HTTPStatus.OK
-    else:
-        abort(http.HTTPStatus.NOT_FOUND)
-
-
-@registry_values_inventory_blueprint.route(
-    "/<string:patient_collection>/values", methods=["PUT"]
-)
-@validate_schema(values_inventory_schema)
-@as_json
-def update_patient_values(patient_collection):
-
-    values_inventory = request.json
-
-    if "_id" in values_inventory:
-        abort(http.HTTPStatus.UNPROCESSABLE_ENTITY)  # 422
-
-    # Update _rev
-    values_inventory["_rev"] = values_inventory["_rev"] + 1
-
-    context = request_context()
-
-    result = scope.database.patient.values_inventory.create_values_inventory(
-        database=context.database,
-        collection_name=patient_collection,
-        values_inventory=values_inventory,
+    # Validate and normalize the response
+    document = request_utils.singleton_get_response_validate(
+        document=document,
     )
 
-    if result is not None:
-        return str(result.inserted_id), http.HTTPStatus.OK
+    return {
+        "valuesinventory": document,
+    }
+
+
+@values_inventory_blueprint.route(
+    "/<string:patient_id>/valuesinventory",
+    methods=["PUT"],
+)
+@request_utils.validate_schema(
+    schema=scope.schema.values_inventory_schema,
+    key="valuesinventory",
+)
+@flask_json.as_json
+def put_values_inventory(patient_id):
+    context = request_context.authorized_for_patient(patient_id=patient_id)
+    patient_collection = context.patient_collection(patient_id=patient_id)
+
+    # Obtain the document being put
+    document = flask.request.json["valuesinventory"]
+
+    # Validate and normalize the request
+    document = request_utils.singleton_put_request_validate(
+        document=document,
+    )
+
+    # Store the document
+    try:
+        result = scope.database.patient.values_inventory.put_values_inventory(
+            collection=patient_collection,
+            values_inventory=document,
+        )
+    except pymongo.errors.DuplicateKeyError:
+        # Indicates a revision race condition, return error with current revision
+        document_conflict = (
+            scope.database.patient.values_inventory.get_values_inventory(
+                collection=patient_collection
+            )
+        )
+        # Validate and normalize the response
+        document_conflict = request_utils.singleton_put_response_validate(
+            document=document_conflict
+        )
+
+        request_utils.abort_revision_conflict(
+            document={
+                "valuesinventory": document_conflict,
+            }
+        )
     else:
-        # NOTE: Send back the latest version of the document. Hold off on that.
-        abort(http.HTTPStatus.UNPROCESSABLE_ENTITY)  # 422
+        # Validate and normalize the response
+        document_response = request_utils.singleton_put_response_validate(
+            document=result.document,
+        )
+        return {
+            "valuesinventory": document_response,
+        }

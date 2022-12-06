@@ -1,8 +1,8 @@
-import { amber, teal } from '@material-ui/core/colors';
-import { createMuiTheme } from '@material-ui/core/styles';
+import { amber, teal } from '@mui/material/colors';
+import { createTheme } from '@mui/material/styles';
 import React from 'react';
 
-declare module '@material-ui/core/styles/createMuiTheme' {
+declare module '@mui/material/styles' {
     interface Theme {
         customPalette: {
             subtle: React.CSSProperties['color'];
@@ -31,7 +31,7 @@ declare module '@material-ui/core/styles/createMuiTheme' {
     }
 }
 
-declare module '@material-ui/core/styles/createBreakpoints' {
+declare module '@mui/system/createTheme/createBreakpoints' {
     interface BreakpointOverrides {
         xs: false; // removes the `xs` breakpoint
         sm: false;
@@ -46,8 +46,15 @@ declare module '@material-ui/core/styles/createBreakpoints' {
 }
 
 export default function createAppTheme() {
-    return createMuiTheme({
-        palette: { type: 'light', primary: teal, secondary: amber },
+    return createTheme({
+        palette: { primary: teal, secondary: amber },
+        typography: {
+            h5: {
+                fontSize: '1.1rem',
+                lineHeight: 1.1,
+            },
+            fontSize: 16,
+        },
         customPalette: {
             subtle: '#eeeeee',
             panel: '#ffffffcc',
@@ -72,7 +79,7 @@ export default function createAppTheme() {
         },
         breakpoints: {
             values: {
-                phone: 0,
+                phone: 360,
                 tablet: 480,
                 laptop: 1024,
                 desktop: 1280,

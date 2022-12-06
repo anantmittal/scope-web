@@ -22,10 +22,18 @@ export const sortAssessmentIds = (a: string, b: string) => {
 };
 
 export const sortAssessmentContent = (a: IAssessmentContent, b: IAssessmentContent) => {
-    return getOrder(a.name) - getOrder(b.name);
+    return getOrder(a.id) - getOrder(b.id);
 };
 
-export const getAssessmentScore = (pointValues: AssessmentData) => {
+export const getAssessmentScoreFromAssessmentLog = (log: IAssessmentLog) => {
+    if (log.totalScore != undefined && log.totalScore >= 0) {
+        return log.totalScore;
+    } else {
+        return sum(Object.keys(log.pointValues).map((k) => log.pointValues[k] || 0));
+    }
+};
+
+export const getAssessmentScoreFromPointValues = (pointValues: AssessmentData) => {
     return sum(Object.keys(pointValues).map((k) => pointValues[k] || 0));
 };
 
@@ -34,13 +42,13 @@ export const getLatestScore = (assessmentLogs: IAssessmentLog[], assessmentId: s
     if (filteredAssessmentLogs.length > 0) {
         const sortedAssessments = filteredAssessmentLogs
             .slice()
-            .sort((a, b) => compareDesc(a.recordedDate, b.recordedDate));
+            .sort((a, b) => compareDesc(a.recordedDateTime, b.recordedDateTime));
         const latest = sortedAssessments[0];
 
         if (!!latest.totalScore) {
             return latest.totalScore;
         } else {
-            return getAssessmentScore(latest.pointValues);
+            return getAssessmentScoreFromPointValues(latest.pointValues);
         }
     }
 

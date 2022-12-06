@@ -1,10 +1,18 @@
-import { CssBaseline } from '@mui/material';
+import {
+    Button,
+    CssBaseline,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+} from '@mui/material';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import withTheme from '@mui/styles/withTheme';
-import { observer } from 'mobx-react';
-import { default as React, FunctionComponent } from 'react';
-import Footer from 'src/components/chrome/Footer';
+import { default as React, FunctionComponent, useEffect, useState } from 'react';
+import { useIdleTimer } from 'react-idle-timer';
+import { useStores } from 'src/stores/stores';
 import styled from 'styled-components';
 
 const RootContainer = styled.div({
@@ -17,11 +25,10 @@ const MainContainer = withTheme(
     styled.main((props) => ({
         flexGrow: 1,
         marginTop: props.theme.customSizes.headerHeight,
-        marginBottom: props.theme.customSizes.footerHeight,
         overflowY: 'hidden',
         overflowX: 'scroll',
         minWidth: 1200,
-    }))
+    })),
 );
 
 const AppBarContainer = withTheme(
@@ -30,7 +37,7 @@ const AppBarContainer = withTheme(
             easing: props.theme.transitions.easing.sharp,
         }),
         width: '100%',
-    }))
+    })),
 );
 
 export interface IChromeProps {
@@ -38,7 +45,55 @@ export interface IChromeProps {
     children: React.ReactNode;
 }
 
-export const Chrome: FunctionComponent<IChromeProps> = observer((props) => {
+const idleTimeout = 1000 * 60 * 15;
+const promptTimeout = 1000 * 60 * 1;
+
+export const Chrome: FunctionComponent<IChromeProps> = (props) => {
+    const { authStore } = useStores();
+
+    const [open, setOpen] = useState(false);
+    const [remaining, setRemaining] = useState(0);
+
+    const onPrompt = () => {
+        setOpen(true);
+        setRemaining(promptTimeout);
+    };
+
+    const onIdle = () => {
+        setOpen(false);
+        setRemaining(0);
+        authStore.logout();
+    };
+
+    const onActive = () => {
+        setOpen(false);
+        setRemaining(0);
+    };
+
+    const { getRemainingTime, isPrompted, reset } = useIdleTimer({
+        timeout: idleTimeout,
+        promptTimeout,
+        onPrompt,
+        onIdle,
+        onActive,
+    });
+
+    const handleStillHere = () => {
+        setOpen(false);
+        reset();
+    };
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (isPrompted()) {
+                setRemaining(Math.ceil(getRemainingTime() / 1000));
+            }
+        }, 1000);
+        return () => {
+            clearInterval(interval);
+        };
+    }, []);
+
     return (
         <RootContainer>
             <CssBaseline />
@@ -46,9 +101,21 @@ export const Chrome: FunctionComponent<IChromeProps> = observer((props) => {
                 <Toolbar variant="dense">{props.headerContent}</Toolbar>
             </AppBarContainer>
             <MainContainer>{props.children}</MainContainer>
-            <Footer></Footer>
+            <Dialog maxWidth="xs" open={open}>
+                <DialogTitle>{'Session timeout'}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {`You have been idle for ${
+                            idleTimeout / 1000 / 60
+                        } minutes. You will be automatically signed out in ${remaining} seconds.`}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleStillHere}>I'm still here</Button>
+                </DialogActions>
+            </Dialog>
         </RootContainer>
     );
-});
+};
 
 export default Chrome;

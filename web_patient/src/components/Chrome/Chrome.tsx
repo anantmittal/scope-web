@@ -1,8 +1,9 @@
-import { BottomNavigation, BottomNavigationAction, withTheme } from '@material-ui/core';
-import EqualizerIcon from '@material-ui/icons/Equalizer';
-import FaceIcon from '@material-ui/icons/Face';
-import HomeIcon from '@material-ui/icons/Home';
-import PlaylistAddCheckIcon from '@material-ui/icons/PlaylistAddCheck';
+import ConnectWithoutContactIcon from '@mui/icons-material/ConnectWithoutContact';
+import EqualizerIcon from '@mui/icons-material/Equalizer';
+import HomeIcon from '@mui/icons-material/Home';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
+import { BottomNavigation, BottomNavigationAction } from '@mui/material';
+import withTheme from '@mui/styles/withTheme';
 import { observer } from 'mobx-react';
 import React, { FunctionComponent } from 'react';
 import { Link } from 'react-router-dom';
@@ -17,7 +18,7 @@ import styled from 'styled-components';
 const Centered = styled.div({
     display: 'flex',
     justifyContent: 'center',
-    height: '100vh',
+    height: '100%',
 });
 
 const ResponsiveContainer = styled.div({
@@ -86,10 +87,12 @@ export const Chrome: FunctionComponent = observer((props) => {
             <ResponsiveContainer>
                 <AppLoader isLoading={rootStore.loadState != 'Fulfilled'} text="Loading" />
                 <GetFormDialog />
-                <ContentContainer>
-                    {mainLevel ? <Background src={BackgroundImageSrc} /> : null}
-                    {props.children}
-                </ContentContainer>
+                {rootStore.loadState == 'Fulfilled' && (
+                    <ContentContainer>
+                        {mainLevel ? <Background src={BackgroundImageSrc} /> : null}
+                        {props.children}
+                    </ContentContainer>
+                )}
                 {mainLevel ? (
                     <BottomBar value={selectedPath} color="transparent">
                         <BottomNavigationAction
@@ -118,11 +121,11 @@ export const Chrome: FunctionComponent = observer((props) => {
                         />
                         <BottomNavigationAction
                             component={Link}
-                            to={Routes.profile}
-                            label={getString('Navigation_profile')}
-                            value={Routes.profile}
+                            to={Routes.resources}
+                            label={getString('Navigation_resources')}
+                            value={Routes.resources}
                             showLabel={true}
-                            icon={<FaceIcon />}
+                            icon={<ConnectWithoutContactIcon />}
                         />
                     </BottomBar>
                 ) : null}

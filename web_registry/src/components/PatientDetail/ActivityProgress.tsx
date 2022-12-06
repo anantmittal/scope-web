@@ -7,7 +7,7 @@ import React, { FunctionComponent } from 'react';
 import { ActivitySuccessType } from 'shared/enums';
 import { IActivityLog } from 'shared/types';
 import ActionPanel from 'src/components/common/ActionPanel';
-import { Table } from 'src/components/common/Table';
+import { renderMultilineCell, Table } from 'src/components/common/Table';
 import { getString } from 'src/services/strings';
 import { usePatient } from 'src/stores/stores';
 
@@ -18,16 +18,16 @@ export const ActivityProgress: FunctionComponent = observer(() => {
 
     currentPatient.activityLogs
         ?.slice()
-        .sort((a, b) => compareAsc(a.recordedDate, b.recordedDate))
-        .forEach((log) => logMap.set(log.scheduleId, log));
+        .sort((a, b) => compareAsc(a.recordedDateTime, b.recordedDateTime))
+        .forEach((log) => logMap.set(log.scheduledActivityId, log));
 
     const logs = currentPatient.scheduledActivities
         ?.slice()
-        .filter((a) => isBefore(a.dueDate, new Date()))
-        .sort((a, b) => compareDesc(a.dueDate, b.dueDate))
+        .filter((a) => isBefore(a.dueDateTime, new Date()) || a.completed)
+        .sort((a, b) => compareDesc(a.dueDateTime, b.dueDateTime))
         .map((scheduledActivity) => ({
             ...scheduledActivity,
-            ...logMap.get(scheduledActivity.scheduleId),
+            ...logMap.get(scheduledActivity.scheduledActivityId),
         }));
 
     const getCompleted = (success: ActivitySuccessType) => {
@@ -43,14 +43,14 @@ export const ActivityProgress: FunctionComponent = observer(() => {
 
     const tableData = logs?.map((log) => {
         return {
-            id: log.scheduleId,
+            id: log.scheduledActivityId,
             name: log.activityName,
-            dueDate: format(log.dueDate, 'MM/dd/yyyy'),
-            recordedDate: log.completed && log.recordedDate ? format(log.recordedDate, 'MM/dd/yyyy') : '--',
+            dueDate: format(log.dueDateTime, 'MM/dd/yyyy'),
+            recordedDateTime: log.completed && log.recordedDateTime ? format(log.recordedDateTime, 'MM/dd/yyyy') : '--',
             completed: log.completed && log.success ? getCompleted(log.success) : '--',
             alternative: log.alternative || '--',
-            pleasure: log.completed ? log.pleasure : '--',
-            accomplishment: log.completed ? log.accomplishment : '--',
+            pleasure: log.completed && log.success != 'No' ? log.pleasure : '--',
+            accomplishment: log.completed && log.success != 'No' ? log.accomplishment : '--',
             comment: log.completed ? log.comment : '--',
         };
     });
@@ -64,7 +64,7 @@ export const ActivityProgress: FunctionComponent = observer(() => {
             hideSortIcons: false,
         },
         {
-            field: 'recordedDate',
+            field: 'recordedDateTime',
             headerName: getString('patient_progress_activity_header_submitted_date'),
             width: 100,
             sortable: true,
@@ -74,6 +74,7 @@ export const ActivityProgress: FunctionComponent = observer(() => {
             field: 'name',
             headerName: getString('patient_progress_activity_header_activity'),
             width: 300,
+            renderCell: renderMultilineCell,
         },
         {
             field: 'completed',
@@ -88,6 +89,7 @@ export const ActivityProgress: FunctionComponent = observer(() => {
             width: 200,
             sortable: false,
             hideSortIcons: false,
+            renderCell: renderMultilineCell,
         },
         {
             field: 'pleasure',
@@ -103,6 +105,7 @@ export const ActivityProgress: FunctionComponent = observer(() => {
             field: 'comment',
             headerName: getString('patient_progress_activity_header_comment'),
             width: 200,
+            renderCell: renderMultilineCell,
         },
     ];
 
@@ -110,7 +113,8 @@ export const ActivityProgress: FunctionComponent = observer(() => {
         <ActionPanel
             id={getString('patient_progress_activity_hash')}
             title={getString('patient_progress_activity_name')}
-            loading={currentPatient?.state == 'Pending'}>
+            loading={currentPatient?.loadPatientState.pending || currentPatient?.loadActivityLogsState.pending}
+            error={currentPatient?.loadActivityLogsState.error}>
             <Grid container alignItems="stretch">
                 {!!logs && logs.length > 0 && (
                     <Table
@@ -123,8 +127,7 @@ export const ActivityProgress: FunctionComponent = observer(() => {
                             disableColumnMenu: true,
                             ...c,
                         }))}
-                        headerHeight={28}
-                        rowHeight={24}
+                        headerHeight={36}
                         autoHeight={true}
                         isRowSelectable={() => false}
                         pagination

@@ -22,7 +22,7 @@ import {
 } from 'react-vis';
 import { clearTime } from 'shared/time';
 import { AssessmentData } from 'shared/types';
-import { getAssessmentScore } from 'src/utils/assessment';
+import { getAssessmentScoreFromPointValues } from 'src/utils/assessment';
 import { useResize } from 'src/utils/hooks';
 import styled, { ThemedStyledProps } from 'styled-components';
 
@@ -30,13 +30,13 @@ const Container = withTheme(
     styled.div({
         display: 'flex',
         flexDirection: 'column',
-    })
+    }),
 );
 
 const ChartContainer = withTheme(
     styled.div({
         flexGrow: 1,
-    })
+    }),
 );
 
 const Accordion = styled((props) => <MuiAccordion disableGutters elevation={0} square {...props} />)(({ theme }) => ({
@@ -70,7 +70,7 @@ const LegendArea = withTheme(
         flexDirection: 'row',
         justifyContent: 'flex-start',
         flexWrap: 'wrap',
-    }))
+    })),
 );
 
 const CrosshairContainer = withTheme(
@@ -78,7 +78,7 @@ const CrosshairContainer = withTheme(
         margin: props.theme.spacing(1),
         minWidth: 100,
         color: props.theme.palette.text.secondary,
-    }))
+    })),
 );
 
 const getColoredSwitch = (color: string) =>
@@ -93,12 +93,13 @@ const getColoredSwitch = (color: string) =>
             '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
                 backgroundColor: color,
             },
-        }))
+        })),
     );
 
 export interface IVisDataPoint {
-    recordedDate: Date;
+    recordedDateTime: Date;
     pointValues: AssessmentData;
+    totalScore?: number;
 }
 
 export interface IAssessmentChartProps {
@@ -140,7 +141,7 @@ export const AssessmentVis = withTheme(
                 state.hoveredPoint = point;
                 state.hoveredIndex = index;
             }),
-            500
+            500,
         );
 
         const dataKeys = scaleOrder || (!!data && data.length > 0 ? Object.keys(data[0].pointValues) : []);
@@ -168,7 +169,7 @@ export const AssessmentVis = withTheme(
         });
 
         if (!!data && data.length > 0) {
-            const oldestDataDate = data[0].recordedDate;
+            const oldestDataDate = data[0].recordedDateTime;
 
             // Minimum last 8 weeks and maximum 24 weeks of data, and snap to weeks
             const maxDate = nextSunday(clearTime(new Date()));
@@ -183,16 +184,19 @@ export const AssessmentVis = withTheme(
             }
 
             const filteredData = data.filter(
-                (d) => compareAsc(minDate, d.recordedDate) < 0 && compareAsc(maxDate, d.recordedDate) > 0
+                (d) => compareAsc(minDate, d.recordedDateTime) < 0 && compareAsc(maxDate, d.recordedDateTime) > 0,
             );
 
             const dailyPoints = filteredData.map(
                 (d) =>
                     ({
-                        x: addHours(clearTime(d.recordedDate), useTime ? 12 : 0).getTime(),
-                        y: getAssessmentScore(d.pointValues),
-                        _x: d.recordedDate.getTime(),
-                    } as Point)
+                        x: addHours(clearTime(d.recordedDateTime), useTime ? 12 : 0).getTime(),
+                        y:
+                            d.totalScore != undefined && d.totalScore >= 0
+                                ? d.totalScore
+                                : getAssessmentScoreFromPointValues(d.pointValues),
+                        _x: d.recordedDateTime.getTime(),
+                    } as Point),
             );
 
             const reduced = dailyPoints.reduce((m, d) => {
@@ -245,19 +249,19 @@ export const AssessmentVis = withTheme(
             const timedDataPoints = filteredData.map(
                 (d) =>
                     ({
-                        x: d.recordedDate.getTime(),
-                        y: getAssessmentScore(d.pointValues),
-                    } as Point)
+                        x: d.recordedDateTime.getTime(),
+                        y: getAssessmentScoreFromPointValues(d.pointValues),
+                    } as Point),
             );
 
             const getDataForKey = (key: string) => {
                 return filteredData.map(
                     (d) =>
                         ({
-                            x: d.recordedDate.getTime(),
+                            x: d.recordedDateTime.getTime(),
                             y: d.pointValues[key],
                             name: key,
-                        } as Point)
+                        } as Point),
                 );
             };
 
@@ -350,7 +354,7 @@ export const AssessmentVis = withTheme(
                                                     <div key={p.x.toString()}>
                                                         {`${format(p.x as number, 'hh:mm aaa')}: ${p.y}`}
                                                     </div>
-                                                )
+                                                ),
                                             )}
                                     </CrosshairContainer>
                                 </Crosshair>
@@ -392,5 +396,5 @@ export const AssessmentVis = withTheme(
         } else {
             return null;
         }
-    })
+    }),
 );
